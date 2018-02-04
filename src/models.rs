@@ -37,9 +37,9 @@ pub struct NewChannel<'a> {
 #[table_name = "categories"]
 pub struct Category {
     pub id: i32,
-    pub channel_id: i32,
     pub name: String,
     pub domain: Option<String>,
+    pub channel_id: i32,
 }
 
 #[derive(Insertable)]
