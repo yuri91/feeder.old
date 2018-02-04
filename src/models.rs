@@ -90,3 +90,4 @@ pub struct NewItemCategory {
     pub item_id: i32,
     pub category_id: i32,
 }
+
