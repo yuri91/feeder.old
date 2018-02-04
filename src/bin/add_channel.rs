@@ -1,29 +1,31 @@
 extern crate feeder;
+extern crate reqwest;
 #[macro_use]
 extern crate quicli;
 extern crate rss;
 
 use quicli::prelude::*;
 
-use std::fs::File;
 use std::io::BufReader;
 
 #[derive(Debug, StructOpt)]
 struct Cli {
-    /// Xml file for the channel
-    #[structopt(long = "file", short = "f")]
-    file: String,
+    /// Upstream URL for the channel
+    #[structopt(long = "url", short = "u")]
+    url: String,
 }
 
 main!(|args: Cli| {
-    let file = File::open(&args.file)?;
-    let channel = rss::Channel::read_from(BufReader::new(file)).expect("Invalid xml file");
+    let resp = reqwest::get(&args.url)?;
+    let channel = rss::Channel::read_from(BufReader::new(resp)).expect("Invalid xml file");
+
     let conn = feeder::establish_connection();
 
     let new_channel = feeder::models::NewChannel {
         title: channel.title(),
         link: channel.link(),
         description: channel.description(),
+        source: &args.url,
         language: channel.language(),
         copyright: channel.copyright(),
         pub_date: channel.pub_date(),
