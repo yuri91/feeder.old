@@ -34,6 +34,16 @@ main!(|args: Cli| {
     };
     let inserted = feeder::queries::channels::get_or_create(&conn, &new_channel)?;
 
-    println!("{:?}", inserted);
+    println!("channel {}", inserted.title);
+
+    for cat in channel.categories() {
+        let new_cat = feeder::models::NewCategory {
+            name: cat.name(),
+            domain: cat.domain(),
+            channel_id: inserted.id,
+        };
+        feeder::queries::categories::get_or_create(&conn, &new_cat)?;
+        println!("category {}", cat.name());
+    }
 });
 
