@@ -7,3 +7,5 @@ authors = ["Yuri Iozzelli <y.iozzelli@gmail.com>"]
 diesel = { version = "1.0.0", features = ["postgres"] }
 dotenv = "0.9.0"
 rss = "1.2.1"
+quicli = "0.1.2"
+structopt = "0.1.7"
