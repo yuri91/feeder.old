@@ -96,16 +96,18 @@ impl Renderable<Context, Model> for Model {
         let view_item = |(idx, item): (usize, &Item)| {
             let title = item.title.clone().unwrap_or(String::new());
             html! {
-                <h4 onclick=move|_| Msg::Details(idx),>{title}</h4>
-                <section>
-                {
-                    if self.current_item == Some(idx) {
-                        view_item_details(&self.items[idx])
-                    } else {
-                        html!{<div></div>}
+                <div>
+                    <h4 onclick=move|_| Msg::Details(idx),>{title}</h4>
+                    <section>
+                    {
+                        if self.current_item == Some(idx) {
+                            view_item_details(&self.items[idx])
+                        } else {
+                            html!{<div></div>}
+                        }
                     }
-                }
-                </section>
+                    </section>
+                </div>
             }
         };
         html! {
