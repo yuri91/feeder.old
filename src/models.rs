@@ -3,7 +3,7 @@ use super::schema::channels;
 use super::schema::items;
 use super::schema::items_categories;
 
-#[derive(Identifiable, Queryable, PartialEq, Debug)]
+#[derive(Identifiable, Queryable, Serialize, PartialEq, Debug)]
 #[table_name = "channels"]
 pub struct Channel {
     pub id: i32,
@@ -32,7 +32,7 @@ pub struct NewChannel<'a> {
     pub ttl: Option<i32>,
 }
 
-#[derive(Identifiable, Queryable, Associations, PartialEq, Debug)]
+#[derive(Identifiable, Queryable, Associations, Serialize, PartialEq, Debug)]
 #[belongs_to(Channel)]
 #[table_name = "categories"]
 pub struct Category {
@@ -50,7 +50,7 @@ pub struct NewCategory<'a> {
     pub domain: Option<&'a str>,
 }
 
-#[derive(Identifiable, Queryable, Associations, PartialEq, Debug)]
+#[derive(Identifiable, Queryable, Associations, Serialize, PartialEq, Debug)]
 #[belongs_to(Channel)]
 #[table_name = "items"]
 pub struct Item {
