@@ -77,20 +77,21 @@ impl Renderable<Context, Model> for Model {
             }
         };
         let view_item_details = |item: &Item| {
-            let title = item.title.clone().unwrap_or("".to_owned());
             let link = item.link.clone().unwrap_or("".to_owned());
             let description = item.description.clone().unwrap_or("".to_owned());
             let author = item.author.clone().unwrap_or("".to_owned());
             let guid = item.guid.clone().unwrap_or("".to_owned());
             let pub_date = item.pub_date.clone().unwrap_or("".to_owned());
             html! {
-                <h2><a href=link,>{title}</a></h2>
-                <article>{description}</article>
-                <footer>
-                    <div>{pub_date}</div>
-                    <div>{author}</div>
-                    <div>{guid}</div>
-                </footer>
+                <div>
+                    <h6><a href=link,>{"link"}</a></h6>
+                    <article><iframe sandbox="", srcdoc=description,></iframe></article>
+                    <footer>
+                        <div>{pub_date}</div>
+                        <div>{author}</div>
+                        <div>{guid}</div>
+                    </footer>
+                </div>
             }
         };
         let view_item = |(idx, item): (usize, &Item)| {

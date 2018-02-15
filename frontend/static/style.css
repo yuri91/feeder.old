@@ -1,3 +1,5 @@
+
+// Layout
 .site-header {
 	grid-area: header;
 }
@@ -23,4 +25,13 @@
 		"nav nav"
 		"aside main"
 		"footer footer";
+}
+// Style
+
+iframe {
+	margin: 0;
+	padding: 0;
+	border: none;
+	scrolling: "no";
+	width: 100%;
 }
