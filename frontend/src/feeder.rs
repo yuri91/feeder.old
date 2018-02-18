@@ -1,5 +1,5 @@
 use super::yew::format::{Nothing, Json};
-use super::yew::services::fetch::{FetchService, FetchHandle, Request, Response};
+use super::yew::services::fetch::{FetchService, FetchTask, Request, Response};
 use super::yew::html::Callback;
 
 use super::{Channel, Item, Category};
@@ -16,7 +16,7 @@ impl FeederService {
         }
     }
 
-    pub fn channels(&mut self, callback: Callback<Result<Vec<Channel>, ()>>) -> FetchHandle {
+    pub fn channels(&mut self, callback: Callback<Result<Vec<Channel>, ()>>) -> FetchTask {
         let url = format!("{}/channels", BASE_URL);
         let handler = move |response: Response<Json<Result<Vec<Channel>, ()>>>| {
             let (_, Json(data)) = response.into_parts();
@@ -25,7 +25,7 @@ impl FeederService {
         let request = Request::get(url.as_str()).body(Nothing).unwrap();
         self.web.fetch(request, handler.into())
     }
-    pub fn items(&mut self, id: i32, callback: Callback<Result<Vec<Item>, ()>>) -> FetchHandle {
+    pub fn items(&mut self, id: i32, callback: Callback<Result<Vec<Item>, ()>>) -> FetchTask {
         let url = format!("{}/items/{}", BASE_URL, id);
         let handler = move |response: Response<Json<Result<Vec<Item>, ()>>>| {
             let (_, Json(data)) = response.into_parts();

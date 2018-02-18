@@ -1,46 +1,88 @@
+@import url('https://fonts.googleapis.com/css?family=Noto+Sans');
 
-// Layout
-.site-header {
-	grid-area: header;
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
 }
-.site-nav {
-	grid-area: nav;
-}
-.site-aside {
-	grid-area: aside;
-}
-.site-main {
-	grid-area: main;
-}
-.site-footer {
-	grid-area: footer;
+
+body {
+	font-family: 'Noto Sans', sans-serif;
 }
 
 #site {
 	display: grid;
-	grid-template-columns: 1fr 3fr;
-	grid-template-rows: auto;
+	grid-template-columns: 280px 1fr 1fr;
+	grid-template-rows: 30px auto 30px;
 	grid-template-areas:
-		"header header"
-		"nav nav"
-		"aside main"
-		"footer footer";
+		"header header header"
+		"nav main details"
+		"nav footer footer";
+	height: 100vh;
+	width: 100vw;
 }
 
-// Fonts
-@import url('https://fonts.googleapis.com/css?family=Noto+Sans');
+.site-header {
+	grid-area: header;
 
-// Style
-
-body {
-	font-family: 'Noto Sans', sans-serif;
-	font-size: 48px;
+	background-color: green;
+	color: white;
+	text-align: center;
 }
 
-iframe {
-	margin: 0;
-	padding: 0;
+.site-nav {
+	grid-area: nav;
+
+	background-color: #111;
+	overflow-x: hidden;
+}
+.site-nav a {
+	color: white;
+	padding: 16px;
+	text-decoration: none;
+	display: block;
+}
+.site-nav a:hover {
+	background-color: #ddd;
+	color: black;
+}
+
+.site-main {
+	grid-area: main;
+	overflow: auto;
+}
+
+.site-footer {
+	grid-area: footer;
+}
+
+.site-details {
+	grid-area: details;
+}
+.details-content {
+	display: none;
+	height: 100%;
+	background-color: #f1f1f1;
+	display: flex;
+	flex-direction: column;
+}
+.details-iframe-container {
+	flex-grow: 1;
+}
+.details-iframe {
 	border: none;
-	scrolling: "no";
+	overflow: auto;
+	height: 100%;
 	width: 100%;
 }
+
+.title {
+	padding: 10px;
+	background-color: grey;
+	color: white;
+}
+.title:hover {
+	background-color: green;
+}
+
+
