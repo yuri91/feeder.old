@@ -12,12 +12,12 @@ body {
 
 #site {
 	display: grid;
-	grid-template-columns: 280px 1fr 1fr;
+	grid-template-columns: 260px 1fr;
 	grid-template-rows: 30px auto 30px;
 	grid-template-areas:
-		"header header header"
-		"nav main details"
-		"nav footer footer";
+		"header header"
+		"nav main"
+		"nav footer";
 	height: 100vh;
 	width: 100vw;
 }
@@ -60,20 +60,12 @@ body {
 	grid-area: details;
 }
 .details-content {
-	display: none;
-	height: 100%;
 	background-color: #f1f1f1;
-	display: flex;
+	display: inline-flex;
 	flex-direction: column;
 }
-.details-iframe-container {
+.details-description {
 	flex-grow: 1;
-}
-.details-iframe {
-	border: none;
-	overflow: auto;
-	height: 100%;
-	width: 100%;
 }
 
 .title {

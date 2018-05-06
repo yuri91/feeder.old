@@ -5,6 +5,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Json.Decode.Pipeline as Pipeline
 
 
@@ -82,13 +83,16 @@ viewChannel c =
   a [ href "#" , onClick <| FetchItems c.id] [ text c.title ]
 
 
-viewItem: Item -> Html Msg
-viewItem i =
-  div []
-  [ div [ class "title" , onClick <| Details i ]
-    [ text <| Maybe.withDefault "[no title]" i.title
+viewItem: Maybe Item -> Item -> Html Msg
+viewItem cur i =
+  if cur == Just i then
+    viewItemDetail i
+  else
+    div []
+    [ div [ class "title" , onClick <| Details i ]
+      [ text <| Maybe.withDefault "[no title]" i.title
+      ]
     ]
-  ]
 
 viewItemDetail: Item -> Html Msg
 viewItemDetail i =
@@ -98,12 +102,8 @@ viewItemDetail i =
       [ text <| Maybe.withDefault "[no title]" i.title
       ]
     ]
-  , div [ class "details-iframe-container" ]
-    [ iframe
-      [ class "details-iframe"
-      , sandbox ""
-      , srcdoc <| Maybe.withDefault "" i.description
-      ] []
+  , div [ class "details-description" ]
+    [ p [Html.Attributes.property "innerHTML" <| Encode.string <| Maybe.withDefault "" i.description] []
     ]
   , footer []
     [ div [] [ viewMaybe text <| i.pub_date ]
@@ -123,8 +123,8 @@ view model =
   div [ id "site" ]
   [ header [ class "site-header" ] [ text "Feeder" ]
   , nav [ class "site-nav" ] <| List.map viewChannel model.channels
-  , section [ class "site-details" ] [ viewMaybe viewItemDetail <| model.currentItem ]
-  , main_ [ class "site-main" ] <| List.map viewItem model.items
+  --, section [ class "site-details" ] [ viewMaybe viewItemDetail <| model.currentItem ]
+  , main_ [ class "site-main" ] <| List.map (viewItem model.currentItem) model.items
   , footer [ class "site-footer" ] [ viewMaybe viewError <| model.currentError ]
   ]
 
