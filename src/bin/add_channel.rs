@@ -26,24 +26,11 @@ main!(|args: Cli| {
         link: channel.link(),
         description: channel.description(),
         source: &args.url,
-        language: channel.language(),
-        copyright: channel.copyright(),
-        pub_date: channel.pub_date(),
         image: channel.image().map(|i| i.url()),
         ttl: channel.ttl().map(|t| t.parse().expect("Invalid TTL field")),
     };
     let inserted = feeder::queries::channels::get_or_create(&conn, &new_channel)?;
 
-    println!("channel {}", inserted.title);
-
-    for cat in channel.categories() {
-        let new_cat = feeder::models::NewCategory {
-            name: cat.name(),
-            domain: cat.domain(),
-            channel_id: inserted.id,
-        };
-        feeder::queries::categories::get_or_create(&conn, &new_cat)?;
-        println!("category {}", cat.name());
-    }
+    println!("channel {} added", inserted.title);
 });
 

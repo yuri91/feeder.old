@@ -74,13 +74,32 @@ body {
 	font-size: 10px;
 }
 
-.title {
+.brief {
 	padding: 10px;
 	background-color: grey;
 	color: white;
+	display: flex;
+	flex-direction: row;
+	width: 100%;
 }
-.title:hover {
+.brief:hover {
 	background-color: green;
+}
+.brief-channel {
+	width: 100px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.brief-title {
+	margin-left: 10px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.brief-date {
+	margin-left: auto;
+	padding-left: 4px;
 }
 
 

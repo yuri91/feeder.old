@@ -4,6 +4,9 @@ extern crate reqwest;
 extern crate quicli;
 extern crate rss;
 extern crate diesel;
+extern crate chrono;
+
+use chrono::{DateTime, FixedOffset};
 
 use diesel::prelude::*;
 
@@ -22,33 +25,33 @@ main!({
         for it in channel.items() {
             let new_item = feeder::models::NewItem {
                 channel_id: s.id,
-                title: it.title(),
-                link: it.link(),
-                description: it.description(),
-                author: it.author(),
+                title: match it.title() {
+                    Some(t) => t,
+                    None => continue,
+                },
+                link: match it.link() {
+                    Some(l) => l,
+                    None => continue,
+                },
+                description: match it.description() {
+                    Some(d) => d,
+                    None => continue,
+                },
                 guid: it.guid().map(|g| g.value()),
-                pub_date: it.pub_date(),
+                pub_date: it.pub_date().and_then(|d| {
+                    match DateTime::<FixedOffset>::parse_from_rfc2822(d) {
+                        Ok(d) => Some(d.naive_utc()),
+                        Err(_) => None,
+                    }
+                }).unwrap_or(chrono::offset::Utc::now().naive_utc()),
             };
             let inserted = feeder::queries::items::insert_if_new(&conn, &new_item)?;
-            if let Some(inserted) = inserted {
+            if inserted.is_some() {
                 count += 1;
-                for cat in it.categories() {
-                    let new_cat = feeder::models::NewCategory {
-                        name: cat.name(),
-                        domain: cat.domain(),
-                        channel_id: s.id,
-                    };
-                    let category = feeder::queries::categories::get_or_create(&conn, &new_cat)?;
-                    let item_category = feeder::models::NewItemCategory {
-                        item_id: inserted.id,
-                        category_id: category.id
-                    };
-                    feeder::queries::items::add_category(&conn, &item_category)?;
-                }
             }
         }
 
-        println!("inserted {}",count);
+        println!("inserted {} items for {}", count, s.title);
     }
 });
 

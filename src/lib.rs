@@ -5,6 +5,7 @@ extern crate rss;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
+extern crate chrono;
 
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
