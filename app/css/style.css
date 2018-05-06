@@ -56,16 +56,22 @@ body {
 	grid-area: footer;
 }
 
-.site-details {
-	grid-area: details;
-}
 .details-content {
 	background-color: #f1f1f1;
 	display: inline-flex;
 	flex-direction: column;
+	padding: 5px;
 }
 .details-description {
 	flex-grow: 1;
+}
+.details-bar {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+}
+.details-footer {
+	font-size: 10px;
 }
 
 .title {

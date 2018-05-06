@@ -42,6 +42,7 @@ type Msg
   | FetchItems Int
   | GotItems (Result Http.Error (List Item))
   | Details Item
+  | CloseDetails
 
 update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -66,6 +67,8 @@ update msg model =
 
     Details item ->
       ({model | currentItem = Just item, currentError = Nothing}, Cmd.none)
+    CloseDetails ->
+      ({model | currentItem = Nothing, currentError = Nothing}, Cmd.none)
 
 -- VIEW
 
@@ -86,7 +89,7 @@ viewChannel c =
 viewItem: Maybe Item -> Item -> Html Msg
 viewItem cur i =
   if cur == Just i then
-    viewItemDetail i
+    viewItemDetails i
   else
     div []
     [ div [ class "title" , onClick <| Details i ]
@@ -94,18 +97,21 @@ viewItem cur i =
       ]
     ]
 
-viewItemDetail: Item -> Html Msg
-viewItemDetail i =
+viewItemDetails: Item -> Html Msg
+viewItemDetails i =
   div [ class "details-content" ]
-  [ h4 []
+  [ div [class "details-bar"]
+    [ span [onClick CloseDetails] [text "X"]
+    ]
+  , h4 []
     [ a [ href <| Maybe.withDefault "" i.link ]
       [ text <| Maybe.withDefault "[no title]" i.title
       ]
     ]
   , div [ class "details-description" ]
-    [ p [Html.Attributes.property "innerHTML" <| Encode.string <| Maybe.withDefault "" i.description] []
+    [ p [property "innerHTML" <| Encode.string <| Maybe.withDefault "" i.description] []
     ]
-  , footer []
+  , footer [ class "details-footer" ]
     [ div [] [ viewMaybe text <| i.pub_date ]
     , div [] [ viewMaybe text <| i.author ]
     , div [] [ viewMaybe text <| i.guid ]
