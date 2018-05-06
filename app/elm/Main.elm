@@ -23,12 +23,13 @@ type alias Model =
   { channels : List Channel
   , items : List Item
   , currentItem: Maybe Item
+  , currentError: Maybe Http.Error
   }
 
 
 init : (Model, Cmd Msg)
 init =
-  ( Model [] [] Nothing
+  ( Model [] [] Nothing Nothing
   , fetchChannels
   )
 
@@ -45,25 +46,25 @@ update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     FetchChannels ->
-      (model, fetchChannels)
+      ({model | currentError = Nothing}, fetchChannels)
 
     GotChannels (Ok channels) ->
-      ({model | channels = channels}, Cmd.none)
+      ({model | channels = channels, currentError = Nothing}, Cmd.none)
 
-    GotChannels (Err _) ->
-      (model, Cmd.none)
+    GotChannels (Err err) ->
+      ({model | currentError = Just err}, Cmd.none)
 
     FetchItems it ->
-      (model, fetchItems it)
+      ({model | currentError = Nothing}, fetchItems it)
 
     GotItems (Ok items) ->
-      ({model | items = items}, Cmd.none)
+      ({model | items = items, currentError = Nothing}, Cmd.none)
 
-    GotItems (Err _) ->
-      (model, Cmd.none)
+    GotItems (Err err) ->
+      ({model | currentError = Just err}, Cmd.none)
 
     Details item ->
-      ({model | currentItem = Just item }, Cmd.none)
+      ({model | currentItem = Just item, currentError = Nothing}, Cmd.none)
 
 -- VIEW
 
@@ -111,6 +112,12 @@ viewItemDetail i =
     ]
   ]
 
+viewError: Http.Error -> Html Msg
+viewError e =
+  div [style [("background-color","red")]]
+  [ text <| toString e
+  ]
+
 view: Model -> Html Msg
 view model =
   div [ id "site" ]
@@ -118,7 +125,7 @@ view model =
   , nav [ class "site-nav" ] <| List.map viewChannel model.channels
   , section [ class "site-details" ] [ viewMaybe viewItemDetail <| model.currentItem ]
   , main_ [ class "site-main" ] <| List.map viewItem model.items
-  , footer [ class "site-footer" ] [ text "Footer" ]
+  , footer [ class "site-footer" ] [ viewMaybe viewError <| model.currentError ]
   ]
 
 -- SUBSCRIPTIONS
