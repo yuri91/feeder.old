@@ -1,98 +1,124 @@
-#![feature(plugin)]
-#![plugin(rocket_codegen)]
-
-extern crate rocket;
-extern crate rocket_contrib;
-extern crate rocket_cors;
-
+extern crate actix;
+extern crate actix_web;
 extern crate diesel;
-
-extern crate r2d2;
-extern crate r2d2_diesel;
-
 extern crate dotenv;
-
-#[macro_use]
-extern crate serde_derive;
+extern crate env_logger;
+extern crate futures;
+extern crate r2d2;
+extern crate serde;
+extern crate serde_json;
 
 extern crate feeder;
 
+use actix_web::*;
+use actix::prelude::*;
+use diesel::prelude::*;
+use diesel::pg::PgConnection;
+use diesel::r2d2::{ConnectionManager, Pool};
+use dotenv::dotenv;
+use futures::Future;
+
 use feeder::models::{Channel, Item};
 
-use rocket_contrib::Json;
-use diesel::QueryResult;
+struct DbExecutor(pub Pool<ConnectionManager<PgConnection>>);
 
-use diesel::pg::PgConnection;
-use r2d2_diesel::ConnectionManager;
+impl Actor for DbExecutor {
+    type Context = SyncContext<Self>;
+}
 
-use dotenv::dotenv;
+struct GetChannels;
+struct GetItems{chan_id: i32}
 
-use std::ops::Deref;
-use rocket::http::Status;
-use rocket::request::{self, FromRequest};
-use rocket::{Outcome, Request, State};
+impl Message for GetChannels {
+    type Result = Result<Vec<Channel>, Error>;
+}
+impl Message for GetItems {
+    type Result = Result<Vec<Item>, Error>;
+}
 
-// Connection request guard type: a wrapper around an r2d2 pooled connection.
-pub struct DbConn(pub r2d2::PooledConnection<ConnectionManager<PgConnection>>);
+impl Handler<GetChannels> for DbExecutor {
+    type Result = Result<Vec<Channel>, Error>;
 
-/// Attempts to retrieve a single connection from the managed database pool. If
-/// no pool is currently managed, fails with an `InternalServerError` status. If
-/// no connections are available, fails with a `ServiceUnavailable` status.
-impl<'a, 'r> FromRequest<'a, 'r> for DbConn {
-    type Error = ();
+    fn handle(&mut self, _: GetChannels, _: &mut Self::Context) -> Self::Result {
+        use feeder::schema::channels::dsl::*;
 
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<DbConn, ()> {
-        let pool = request.guard::<State<Pool>>()?;
-        match pool.get() {
-            Ok(conn) => Outcome::Success(DbConn(conn)),
-            Err(_) => Outcome::Failure((Status::ServiceUnavailable, ())),
-        }
+        let conn: &PgConnection = &self.0.get().unwrap();
+        Ok(channels
+            .get_results(conn)
+            .map_err(|_| error::ErrorInternalServerError("Error querying channels"))?)
+    }
+}
+impl Handler<GetItems> for DbExecutor {
+    type Result = Result<Vec<Item>, Error>;
+
+    fn handle(&mut self, gi: GetItems, _: &mut Self::Context) -> Self::Result {
+        use feeder::schema::items::dsl::*;
+
+        let conn: &PgConnection = &self.0.get().unwrap();
+        Ok(items
+            .filter(channel_id.eq(gi.chan_id))
+            .get_results(conn)
+            .map_err(|_| error::ErrorInternalServerError(format!("Error getting items for channel {}", gi.chan_id)))?)
     }
 }
 
-// For the convenience of using an &DbConn as an &SqliteConnection.
-impl Deref for DbConn {
-    type Target = PgConnection;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+struct AppState {
+    db: Addr<Syn, DbExecutor>,
 }
 
-type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
-
-fn init_pool() -> Pool {
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    r2d2::Pool::new(manager).expect("db pool error")
+fn channels(state: State<AppState>) -> FutureResponse<HttpResponse> {
+    state
+        .db
+        .send(GetChannels)
+        .from_err()
+        .and_then(|res| match res {
+            Ok(c) => Ok(HttpResponse::Ok().json(c)),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
 }
-
-#[get("/items/<chan_id>")]
-fn items(conn: DbConn, chan_id: i32) -> QueryResult<Json<Vec<Item>>> {
-    use feeder::schema::items::dsl::*;
-    use diesel::prelude::*;
-
-    let its = items
-        .filter(channel_id.eq(chan_id))
-        .get_results(&*conn)?;
-    Ok(Json(its))
-}
-
-#[get("/channels")]
-fn channels(conn: DbConn) -> QueryResult<Json<Vec<Channel>>> {
-    use feeder::schema::channels::dsl::*;
-    use diesel::prelude::*;
-
-    channels.get_results(&*conn).map(|c| Json(c))
+fn items(chan: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+    state
+        .db
+        .send(GetItems{chan_id: chan.into_inner()})
+        .from_err()
+        .and_then(|res| match res {
+            Ok(i) => Ok(HttpResponse::Ok().json(i)),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
 }
 
 fn main() {
+    std::env::set_var("RUST_LOG", "actix_web=info");
     dotenv().ok();
+    env_logger::init();
 
-    let cors = rocket_cors::Cors::default();
-    rocket::ignite()
-        .manage(init_pool())
-        .attach(cors)
-        .mount("/", routes![channels, items])
-        .launch();
+    let sys = actix::System::new("feeder-api");
+
+    let manager = ConnectionManager::<PgConnection>::new(
+        std::env::var("DATABASE_URL").expect("no DATABASE_URL set"),
+    );
+    let pool = r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool");
+
+    let addr = SyncArbiter::start(4, move || DbExecutor(pool.clone()));
+
+    server::new(move || {
+        App::with_state(AppState { db: addr.clone() })
+            .middleware(middleware::Logger::default())
+            .configure(|app| {
+                middleware::cors::Cors::for_app(app)
+                    .allowed_origin("http://localhost:8000")
+                    .resource("/channels", |r| r.method(http::Method::GET).with(channels))
+                    .resource("/items/{chan_id}", |r| r.method(http::Method::GET).with2(items))
+                    .register()
+            })
+    }).bind("127.0.0.1:8888")
+        .unwrap()
+        .start();
+
+    println!("Started http server: 127.0.0.1:8888");
+    let _ = sys.run();
 }
