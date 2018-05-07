@@ -1,4 +1,4 @@
-import Elm from "./main";
+import Elm from "./Main.elm";
 
 const elmDiv = document.querySelector("#elm-container");
 

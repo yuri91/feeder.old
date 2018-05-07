@@ -2,7 +2,7 @@
 /target/
 **/*.rs.bk
 **/*.swp
-/public/
 /app/node_modules/
-/app/elm/elm-stuff/
-/app/js/main.js
+/app/elm-stuff/
+/app/dist/
+/app/.cache/
