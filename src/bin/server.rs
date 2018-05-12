@@ -18,7 +18,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use dotenv::dotenv;
 use futures::Future;
 
-use feeder::models::{Channel, Item};
+use feeder::models::{Channel, Item, ReadItem, UserItem};
 
 struct DbExecutor(pub Pool<ConnectionManager<PgConnection>>);
 
@@ -33,7 +33,7 @@ impl Message for GetChannels {
     type Result = Result<Vec<Channel>, Error>;
 }
 impl Message for GetItems {
-    type Result = Result<Vec<Item>, Error>;
+    type Result = Result<Vec<UserItem>, Error>;
 }
 
 impl Handler<GetChannels> for DbExecutor {
@@ -41,23 +41,34 @@ impl Handler<GetChannels> for DbExecutor {
 
     fn handle(&mut self, _: GetChannels, _: &mut Self::Context) -> Self::Result {
         use feeder::schema::channels::dsl::*;
+        use feeder::schema::subscriptions;
 
         let conn: &PgConnection = &self.0.get().unwrap();
         Ok(channels
+            .inner_join(subscriptions::table)
+            .filter(subscriptions::columns::user_id.eq(1))
+            .select(feeder::schema::channels::all_columns)
             .get_results(conn)
             .map_err(|_| error::ErrorInternalServerError("Error querying channels"))?)
     }
 }
 impl Handler<GetItems> for DbExecutor {
-    type Result = Result<Vec<Item>, Error>;
+    type Result = Result<Vec<UserItem>, Error>;
 
     fn handle(&mut self, gi: GetItems, _: &mut Self::Context) -> Self::Result {
         use feeder::schema::items::dsl::*;
+        use feeder::schema::read_items;
+        use feeder::schema::subscriptions;
 
         let conn: &PgConnection = &self.0.get().unwrap();
         Ok(items
+            .inner_join(subscriptions::table.on(channel_id.eq(subscriptions::channel_id)))
+            .left_join(read_items::table)
+            .filter(subscriptions::user_id.eq(1))
             .filter(channel_id.eq(gi.chan_id))
+            .select((feeder::schema::items::all_columns, read_items::all_columns.nullable()))
             .get_results(conn)
+            .map(|v: Vec<(Item, Option<ReadItem>)>| v.into_iter().map(|(i, r)| UserItem{item:i, read: r.is_some()}).collect())
             .map_err(|_| error::ErrorInternalServerError(format!("Error getting items for channel {}", gi.chan_id)))?)
     }
 }

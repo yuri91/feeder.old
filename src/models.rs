@@ -53,6 +53,13 @@ pub struct NewItem<'a> {
     pub guid: Option<&'a str>,
 }
 
+#[derive(Serialize, PartialEq, Debug)]
+pub struct UserItem {
+    #[serde(flatten)]
+    pub item: Item,
+    pub read: bool,
+}
+
 #[derive(Identifiable, Queryable, Associations, Serialize, PartialEq, Debug)]
 #[table_name = "users"]
 pub struct User {
