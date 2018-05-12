@@ -1,5 +1,8 @@
 use super::schema::channels;
 use super::schema::items;
+use super::schema::users;
+use super::schema::subscriptions;
+use super::schema::read_items;
 use super::chrono::NaiveDateTime;
 
 
@@ -48,4 +51,51 @@ pub struct NewItem<'a> {
     pub description: &'a str,
     pub pub_date: NaiveDateTime,
     pub guid: Option<&'a str>,
+}
+
+#[derive(Identifiable, Queryable, Associations, Serialize, PartialEq, Debug)]
+#[table_name = "users"]
+pub struct User {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Insertable)]
+#[table_name = "users"]
+pub struct NewUser<'a> {
+    pub name: &'a str,
+}
+
+#[derive(Identifiable, Queryable, Associations, PartialEq, Debug)]
+#[belongs_to(User)]
+#[belongs_to(Channel)]
+#[table_name = "subscriptions"]
+pub struct Subscription {
+    pub id: i32,
+    pub user_id: i32,
+    pub channel_id: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "subscriptions"]
+pub struct NewSubscription {
+    pub user_id: i32,
+    pub channel_id: i32,
+}
+
+#[derive(Identifiable, Queryable, Associations, PartialEq, Debug)]
+#[belongs_to(User)]
+#[belongs_to(Item)]
+#[table_name = "read_items"]
+pub struct ReadItem {
+    pub id: i32,
+    pub user_id: i32,
+    pub item_id: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "read_items"]
+pub struct NewReadItem {
+    pub user_id: i32,
+    pub item_id: i32,
 }

@@ -21,7 +21,7 @@ main!(|args: Cli| {
 
     let conn = feeder::establish_connection();
 
-    let new_channel = feeder::models::NewChannel {
+    let channel = feeder::models::NewChannel {
         title: channel.title(),
         link: channel.link(),
         description: channel.description(),
@@ -29,8 +29,19 @@ main!(|args: Cli| {
         image: channel.image().map(|i| i.url()),
         ttl: channel.ttl().map(|t| t.parse().expect("Invalid TTL field")),
     };
-    let inserted = feeder::queries::channels::get_or_create(&conn, &new_channel)?;
+    let channel = feeder::queries::channels::get_or_create(&conn, &channel)?;
 
-    println!("channel {} added", inserted.title);
+    println!("channel {} added", channel.title);
+
+    let user = feeder::models::NewUser{name: "yuri"};
+    let user = feeder::queries::users::get_or_create(&conn, &user)?;
+
+    let sub = feeder::models::NewSubscription {
+        user_id: user.id,
+        channel_id: channel.id,
+    };
+    let _ = feeder::queries::subscriptions::get_or_create(&conn, &sub)?;
+
+    println!("user {} subscribed to channel", user.name);
 });
 
