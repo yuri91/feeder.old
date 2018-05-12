@@ -85,6 +85,9 @@ body {
 .brief:hover {
 	background-color: green;
 }
+.brief-read {
+	background-color: lightgrey;
+}
 .brief-channel {
 	width: 100px;
 	min-width: 100px;

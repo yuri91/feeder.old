@@ -18,7 +18,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use dotenv::dotenv;
 use futures::Future;
 
-use feeder::models::{Channel, Item, ReadItem, UserItem};
+use feeder::models::{Channel, Item, NewReadItem, ReadItem, UserItem};
 
 struct DbExecutor(pub Pool<ConnectionManager<PgConnection>>);
 
@@ -27,13 +27,21 @@ impl Actor for DbExecutor {
 }
 
 struct GetChannels;
-struct GetItems{chan_id: i32}
+struct GetItems {
+    chan_id: i32,
+}
+struct DoReadItem {
+    item_id: i32,
+}
 
 impl Message for GetChannels {
     type Result = Result<Vec<Channel>, Error>;
 }
 impl Message for GetItems {
     type Result = Result<Vec<UserItem>, Error>;
+}
+impl Message for DoReadItem {
+    type Result = Result<(), Error>;
 }
 
 impl Handler<GetChannels> for DbExecutor {
@@ -66,10 +74,46 @@ impl Handler<GetItems> for DbExecutor {
             .left_join(read_items::table)
             .filter(subscriptions::user_id.eq(1))
             .filter(channel_id.eq(gi.chan_id))
-            .select((feeder::schema::items::all_columns, read_items::all_columns.nullable()))
+            .select((
+                feeder::schema::items::all_columns,
+                read_items::all_columns.nullable(),
+            ))
             .get_results(conn)
-            .map(|v: Vec<(Item, Option<ReadItem>)>| v.into_iter().map(|(i, r)| UserItem{item:i, read: r.is_some()}).collect())
-            .map_err(|_| error::ErrorInternalServerError(format!("Error getting items for channel {}", gi.chan_id)))?)
+            .map(|v: Vec<(Item, Option<ReadItem>)>| {
+                v.into_iter()
+                    .map(|(i, r)| UserItem {
+                        item: i,
+                        read: r.is_some(),
+                    })
+                    .collect()
+            })
+            .map_err(|_| {
+                error::ErrorInternalServerError(format!(
+                    "Error getting items for channel {}",
+                    gi.chan_id
+                ))
+            })?)
+    }
+}
+impl Handler<DoReadItem> for DbExecutor {
+    type Result = Result<(), Error>;
+
+    fn handle(&mut self, ri: DoReadItem, _: &mut Self::Context) -> Self::Result {
+        let user_id = 1;
+        let conn: &PgConnection = &self.0.get().unwrap();
+        let _ = feeder::queries::read_items::get_or_create(
+            conn,
+            &NewReadItem {
+                user_id: user_id,
+                item_id: ri.item_id,
+            },
+        ).map_err(|_| {
+            error::ErrorInternalServerError(format!(
+                "Error setting item {} as read for user {}",
+                ri.item_id, user_id
+            ))
+        })?;
+        Ok(())
     }
 }
 
@@ -91,10 +135,25 @@ fn channels(state: State<AppState>) -> FutureResponse<HttpResponse> {
 fn items(chan: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
     state
         .db
-        .send(GetItems{chan_id: chan.into_inner()})
+        .send(GetItems {
+            chan_id: chan.into_inner(),
+        })
         .from_err()
         .and_then(|res| match res {
             Ok(i) => Ok(HttpResponse::Ok().json(i)),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
+}
+fn read(it: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+    state
+        .db
+        .send(DoReadItem {
+            item_id: it.into_inner(),
+        })
+        .from_err()
+        .and_then(|res| match res {
+            Ok(_) => Ok(HttpResponse::Ok().finish()),
             Err(_) => Ok(HttpResponse::InternalServerError().into()),
         })
         .responder()
@@ -123,7 +182,12 @@ fn main() {
                 middleware::cors::Cors::for_app(app)
                     .allowed_origin("http://localhost:8000")
                     .resource("/channels", |r| r.method(http::Method::GET).with(channels))
-                    .resource("/items/{chan_id}", |r| r.method(http::Method::GET).with2(items))
+                    .resource("/items/{chan_id}", |r| {
+                        r.method(http::Method::GET).with2(items)
+                    })
+                    .resource("/read/{item_id}", |r| {
+                        r.method(http::Method::POST).with2(read)
+                    })
                     .register()
             })
     }).bind("127.0.0.1:8888")

@@ -115,3 +115,40 @@ pub mod subscriptions {
             .get_result(conn)
     }
 }
+
+pub mod read_items {
+    use diesel::prelude::*;
+    use diesel::pg::PgConnection;
+    use diesel::QueryResult;
+    use diesel::ExpressionMethods;
+    use diesel::insert_into;
+    use schema::read_items;
+    use models::*;
+
+    pub fn get_or_create(
+        conn: &PgConnection,
+        read_item: &NewReadItem,
+    ) -> QueryResult<ReadItem> {
+        read_items::table
+            .filter(
+                read_items::user_id
+                    .eq(read_item.user_id)
+                    .and(read_items::item_id.eq(read_item.item_id)),
+            )
+            .first::<ReadItem>(conn)
+            .optional()
+            .and_then(|r| match r {
+                Some(r) => Ok(r),
+                None => create(conn, read_item),
+            })
+    }
+
+    pub fn create(
+        conn: &PgConnection,
+        read_item: &NewReadItem,
+    ) -> QueryResult<ReadItem> {
+        insert_into(read_items::table)
+            .values(read_item)
+            .get_result(conn)
+    }
+}

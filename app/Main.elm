@@ -47,6 +47,7 @@ type Msg
   | FetchItems Channel
   | GotItems (Result Http.Error (List Item))
   | Details Item
+  | DidReadItems (Result Http.Error ())
   | CloseDetails
   | UpdateDate Time
 
@@ -72,7 +73,16 @@ update msg model =
       ({model | currentError = Just err}, Cmd.none)
 
     Details item ->
-      ({model | currentItem = Just item, currentError = Nothing}, Cmd.none)
+      let i =
+        {item | read = True}
+      in
+        ({model | currentItem = Just i, items = updateItem model.items i, currentError = Nothing}, readItem i)
+
+    DidReadItems (Ok ()) ->
+      ({model | currentError = Nothing}, Cmd.none)
+
+    DidReadItems (Err err) ->
+      ({model | currentError = Just err}, Cmd.none)
 
     CloseDetails ->
       ({model | currentItem = Nothing, currentError = Nothing}, Cmd.none)
@@ -137,7 +147,10 @@ showInterval cur_date item_date =
 
 viewItemBrief: Item -> Date -> Html Msg
 viewItemBrief i now =
-  div [ class "brief" , onClick <| Details i ]
+  div
+  [ classList [ ("brief", True) , ("brief-read", i.read) ]
+  , onClick <| Details i
+  ]
   [ span [ class "brief-channel" ] [ text i.channel.title ]
   , span [ class "brief-title" ] [ text i.title ]
   , span [ class "brief-date" ] [text <|  showInterval now i.pub_date]
@@ -198,6 +211,18 @@ type alias Channel =
   , ttl : Maybe Int
   }
 
+type alias Item =
+  { id : Int
+  , channel_id: Int
+  , title: String
+  , link: String
+  , description: String
+  , pub_date: Date
+  , read: Bool
+  , channel: Channel
+  }
+
+
 channelDecoder: Decode.Decoder Channel
 channelDecoder =
   Pipeline.decode Channel
@@ -213,32 +238,6 @@ decodeChannels: Decode.Decoder (List Channel)
 decodeChannels =
   Decode.list channelDecoder
 
-fetchChannels : Cmd Msg
-fetchChannels =
-  let
-    url =
-      baseUrl ++ "/channels"
-  in
-    Http.send GotChannels (Http.get url decodeChannels)
-
-type alias Item =
-  { id : Int
-  , channel_id: Int
-  , title: String
-  , link: String
-  , description: String
-  , pub_date: Date
-  , channel: Channel
-  }
-
-fetchItems : Channel -> Cmd Msg
-fetchItems c =
-  let
-    url =
-      baseUrl ++ "/items/" ++ (toString c.id)
-  in
-    Http.send GotItems (Http.get url <| decodeItems c)
-
 itemDecoder: Channel -> Decode.Decoder Item
 itemDecoder c =
   Pipeline.decode Item
@@ -248,12 +247,63 @@ itemDecoder c =
     |> Pipeline.required "link" Decode.string
     |> Pipeline.required "description" Decode.string
     |> Pipeline.required "pub_date" DecodeExtra.date
+    |> Pipeline.required "read" Decode.bool
     |> Pipeline.hardcoded c
 
 decodeItems: Channel -> Decode.Decoder (List Item)
 decodeItems c =
   Decode.list <| itemDecoder c
 
+
+
 compareItems: Item -> Item -> Order
 compareItems i1 i2 =
   DateExtra.compare i2.pub_date i1.pub_date
+
+updateItem: List Item -> Item -> List Item
+updateItem li i =
+  let updateItem u =
+    if u.id == i.id then
+      i
+    else
+      u
+  in
+    List.map updateItem li
+
+fetchChannels : Cmd Msg
+fetchChannels =
+  let
+    url =
+      baseUrl ++ "/channels"
+  in
+    Http.send GotChannels (Http.get url decodeChannels)
+
+fetchItems : Channel -> Cmd Msg
+fetchItems c =
+  let
+    url =
+      baseUrl ++ "/items/" ++ (toString c.id)
+  in
+    Http.send GotItems (Http.get url <| decodeItems c)
+
+emptyPost : String -> Http.Request ()
+-- Because when Http.post expects a JSON, and empty responses aren't valid JSON
+-- we have to use this to get around it.
+emptyPost url =
+    Http.request
+       { method = "POST"
+       , headers = []
+       , url = url
+       , body = Http.emptyBody
+       , expect = Http.expectStringResponse (\_ -> Ok ())
+       , timeout = Nothing
+       , withCredentials = False
+       }
+
+readItem : Item -> Cmd Msg
+readItem i =
+  let
+    url =
+      baseUrl ++ "/read/" ++ (toString i.id)
+  in
+    Http.send DidReadItems (emptyPost url)
