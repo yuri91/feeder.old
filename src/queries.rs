@@ -35,11 +35,23 @@ pub mod items {
     use models::*;
 
     pub fn insert_if_new(conn: &PgConnection, item: &NewItem) -> QueryResult<Option<Item>> {
-        if item.guid.is_none() {
-            Ok(Some(create(conn, item)?))
-        } else {
+        if item.guid.is_some() {
             items::table
                 .filter(items::guid.eq(item.guid))
+                .first::<Item>(conn)
+                .optional()
+                .and_then(|r| match r {
+                    Some(_) => Ok(None),
+                    None => Ok(Some(create(conn, item)?)),
+                })
+        } else {
+            items::table
+                .filter(
+                    items::channel_id
+                        .eq(item.channel_id)
+                        .and(items::title.eq(item.title))
+                        .and(items::description.eq(item.description)),
+                )
                 .first::<Item>(conn)
                 .optional()
                 .and_then(|r| match r {
@@ -125,10 +137,7 @@ pub mod read_items {
     use schema::read_items;
     use models::*;
 
-    pub fn get_or_create(
-        conn: &PgConnection,
-        read_item: &NewReadItem,
-    ) -> QueryResult<ReadItem> {
+    pub fn get_or_create(conn: &PgConnection, read_item: &NewReadItem) -> QueryResult<ReadItem> {
         read_items::table
             .filter(
                 read_items::user_id
@@ -143,10 +152,7 @@ pub mod read_items {
             })
     }
 
-    pub fn create(
-        conn: &PgConnection,
-        read_item: &NewReadItem,
-    ) -> QueryResult<ReadItem> {
+    pub fn create(conn: &PgConnection, read_item: &NewReadItem) -> QueryResult<ReadItem> {
         insert_into(read_items::table)
             .values(read_item)
             .get_result(conn)
