@@ -13,9 +13,10 @@ body {
 #site {
 	display: grid;
 	grid-template-columns: 260px 1fr;
-	grid-template-rows: 30px auto 30px;
+	grid-template-rows: 30px 40px auto 30px;
 	grid-template-areas:
 		"header header"
+		"nav toolbar"
 		"nav main"
 		"nav footer";
 	height: 100vh;
@@ -45,6 +46,27 @@ body {
 .site-nav a:hover {
 	background-color: #ddd;
 	color: black;
+}
+
+.site-toolbar {
+	grid-area: toolbar;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+}
+
+.site-toolbar-refresh {
+	display: inline-block;
+	width: 40px;
+	height: 40px;
+	background: url(static/refresh.svg);
+	background-size: 24px 24px;
+	background-position: center;
+	background-repeat: no-repeat;
+	vertical-align: middle;
+}
+.site-toolbar-refresh:hover {
+	background-color: grey;
 }
 
 .site-main {

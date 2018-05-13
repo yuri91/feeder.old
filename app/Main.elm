@@ -181,11 +181,16 @@ viewError e =
   [ text <| toString e
   ]
 
+viewRefresh: List Channel -> Html Msg
+viewRefresh c =
+  a [ class "site-toolbar-refresh", href "#"] []
+
 view: Model -> Html Msg
 view model =
   div [ id "site" ]
   [ header [ class "site-header" ] [ text "Feeder" ]
   , nav [ class "site-nav" ] <| List.map viewChannel model.channels
+  , div [ class "site-toolbar" ] [ viewRefresh model.channels]
   , main_ [ class "site-main" ] <| List.map (viewItem model.currentDate model.currentItem) model.items
   , footer [ class "site-footer" ] [ viewMaybe viewError <| model.currentError ]
   ]
