@@ -1,0 +1,5 @@
+CREATE TABLE read_items (
+	id SERIAL PRIMARY KEY,
+	user_id INTEGER NOT NULL REFERENCES users (id),
+	item_id INTEGER NOT NULL REFERENCES items (id)
+)
