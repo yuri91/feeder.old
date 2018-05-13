@@ -204,7 +204,7 @@ viewError e =
 
 viewRefresh: List Channel -> Html Msg
 viewRefresh c =
-  a [ class "site-toolbar-refresh", href "#"] []
+  a [ class "site-toolbar-refresh", href "#", onClick FetchItems] []
 
 
 view: Model -> Html Msg
