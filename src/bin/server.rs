@@ -39,6 +39,7 @@ struct GetItems {
 }
 struct DoReadItem {
     item_id: i32,
+    user_id: i32,
 }
 
 impl Message for GetChannels {
@@ -105,20 +106,28 @@ impl Handler<DoReadItem> for DbExecutor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, ri: DoReadItem, _: &mut Self::Context) -> Self::Result {
-        let user_id = 1;
         let conn: &PgConnection = &self.0.get().unwrap();
-        let _ = feeder::queries::read_items::get_or_create(
-            conn,
-            &NewReadItem {
-                user_id: user_id,
-                item_id: ri.item_id,
-            },
-        ).map_err(|_| {
-            error::ErrorInternalServerError(format!(
-                "Error setting item {} as read for user {}",
-                ri.item_id, user_id
-            ))
-        })?;
+        if ri.item_id < 0 {
+            let _ = feeder::queries::read_items::read_all(conn, ri.user_id).map_err(|_| {
+                error::ErrorInternalServerError(format!(
+                    "Error setting item {} as read for user {}",
+                    ri.item_id, ri.user_id
+                ))
+            })?;
+        } else {
+            let _ = feeder::queries::read_items::get_or_create(
+                conn,
+                &NewReadItem {
+                    user_id: ri.user_id,
+                    item_id: ri.item_id,
+                },
+            ).map_err(|_| {
+                error::ErrorInternalServerError(format!(
+                    "Error setting item {} as read for user {}",
+                    ri.item_id, ri.user_id
+                ))
+            })?;
+        }
         Ok(())
     }
 }
@@ -156,6 +165,21 @@ fn read(it: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
         .db
         .send(DoReadItem {
             item_id: it.into_inner(),
+            user_id: 1,
+        })
+        .from_err()
+        .and_then(|res| match res {
+            Ok(_) => Ok(HttpResponse::Ok().finish()),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
+}
+fn read_all(state: State<AppState>) -> FutureResponse<HttpResponse> {
+    state
+        .db
+        .send(DoReadItem {
+            item_id: -1,
+            user_id: 1,
         })
         .from_err()
         .and_then(|res| match res {
@@ -188,9 +212,8 @@ fn main() {
                 middleware::cors::Cors::for_app(app)
                     .allowed_origin("http://localhost:8000")
                     .resource("/channels", |r| r.method(http::Method::GET).with(channels))
-                    .resource("/items", |r| {
-                        r.method(http::Method::GET).with2(items)
-                    })
+                    .resource("/items", |r| r.method(http::Method::GET).with2(items))
+                    .resource("/read/all", |r| r.method(http::Method::POST).with(read_all))
                     .resource("/read/{item_id}", |r| {
                         r.method(http::Method::POST).with2(read)
                     })

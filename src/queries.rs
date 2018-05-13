@@ -135,6 +135,7 @@ pub mod read_items {
     use diesel::ExpressionMethods;
     use diesel::insert_into;
     use schema::read_items;
+    use schema::items;
     use models::*;
 
     pub fn get_or_create(conn: &PgConnection, read_item: &NewReadItem) -> QueryResult<ReadItem> {
@@ -156,5 +157,19 @@ pub mod read_items {
         insert_into(read_items::table)
             .values(read_item)
             .get_result(conn)
+    }
+
+    pub fn read_all(conn: &PgConnection, user_id: i32) -> QueryResult<()> {
+        let unread = items::table
+            .left_join(read_items::table)
+            .filter(read_items::id.is_null())
+            .select(items::id)
+            .get_results(conn)?;
+        println!("{:?}", unread);
+        for item_id in unread {
+            create(conn, &NewReadItem{ user_id, item_id })?;
+        }
+
+        Ok(())
     }
 }

@@ -52,6 +52,7 @@ type Msg
   | UnselectItem
   | SelectChannel Channel
   | UnselectChannel
+  | ReadAllItems
   | DidReadItems (Result Http.Error ())
   | UpdateDate Time
 
@@ -90,6 +91,9 @@ update msg model =
 
     UnselectChannel ->
       ({model | currentChannel = Nothing, currentError = Nothing}, Cmd.none)
+
+    ReadAllItems ->
+      ({model | currentItem = Nothing, items = List.map (\i -> {i | read = True}) model.items, currentError = Nothing}, readAllItems)
 
     DidReadItems (Ok ()) ->
       ({model | currentError = Nothing}, Cmd.none)
@@ -202,9 +206,12 @@ viewError e =
   [ text <| toString e
   ]
 
-viewRefresh: List Channel -> Html Msg
-viewRefresh c =
-  a [ class "site-toolbar-refresh", href "#", onClick FetchItems] []
+viewToolbar: Html Msg
+viewToolbar=
+  div []
+  [ a [ class "site-toolbar-read-all", href "#", onClick ReadAllItems] []
+  , a [ class "site-toolbar-refresh", href "#", onClick FetchItems] []
+  ]
 
 
 view: Model -> Html Msg
@@ -212,7 +219,7 @@ view model =
   div [ id "site" ]
   [ header [ class "site-header" ] [ text "Feeder" ]
   , nav [ class "site-nav" ] [ viewChannels model.channels ]
-  , div [ class "site-toolbar" ] [ viewRefresh model.channels]
+  , div [ class "site-toolbar" ] [ viewToolbar]
   , main_ [ class "site-main" ]
     [ viewItems model.items model.currentItem model.currentChannel model.currentDate
     ]
@@ -341,5 +348,13 @@ readItem i =
   let
     url =
       baseUrl ++ "/read/" ++ (toString i.id)
+  in
+    Http.send DidReadItems (emptyPost url)
+
+readAllItems : Cmd Msg
+readAllItems =
+  let
+    url =
+      baseUrl ++ "/read/all"
   in
     Http.send DidReadItems (emptyPost url)
