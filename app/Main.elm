@@ -12,6 +12,7 @@ import Date exposing (..)
 import Date.Extra as DateExtra
 import Time exposing (..)
 import Task exposing (..)
+import List.Extra
 
 main =
   Html.program
@@ -28,6 +29,7 @@ type alias Model =
   { channels : List Channel
   , items : List Item
   , currentItem: Maybe Item
+  , currentChannel: Maybe Channel
   , currentError: Maybe Http.Error
   , currentDate: Date
   }
@@ -35,8 +37,8 @@ type alias Model =
 
 init : (Model, Cmd Msg)
 init =
-  ( Model [] [] Nothing Nothing (Date.fromTime 0)
-  , Cmd.batch [getNow, fetchChannels]
+  ( Model [] [] Nothing Nothing Nothing (Date.fromTime 0)
+  , Cmd.batch [getNow, fetchChannels, fetchItems]
   )
 
 -- UPDATE
@@ -44,11 +46,13 @@ init =
 type Msg
   = FetchChannels
   | GotChannels (Result Http.Error (List Channel))
-  | FetchItems Channel
+  | FetchItems
   | GotItems (Result Http.Error (List Item))
-  | Details Item
+  | SelectItem Item
+  | UnselectItem
+  | SelectChannel Channel
+  | UnselectChannel
   | DidReadItems (Result Http.Error ())
-  | CloseDetails
   | UpdateDate Time
 
 update: Msg -> Model -> (Model, Cmd Msg)
@@ -63,29 +67,35 @@ update msg model =
     GotChannels (Err err) ->
       ({model | currentError = Just err}, Cmd.none)
 
-    FetchItems c ->
-      ({model | currentError = Nothing}, fetchItems c)
+    FetchItems ->
+      ({model | currentError = Nothing}, fetchItems)
 
     GotItems (Ok items) ->
-      ({model | items = List.sortWith compareItems <| items, currentError = Nothing}, Cmd.none)
+      ({model | items = List.sortWith compareItems <| List.map (addChannelToItem model.channels) items, currentError = Nothing}, Cmd.none)
 
     GotItems (Err err) ->
       ({model | currentError = Just err}, Cmd.none)
 
-    Details item ->
+    SelectItem item ->
       let i =
         {item | read = True}
       in
         ({model | currentItem = Just i, items = updateItem model.items i, currentError = Nothing}, readItem i)
+
+    UnselectItem ->
+      ({model | currentItem = Nothing, currentError = Nothing}, Cmd.none)
+
+    SelectChannel c ->
+      ({model | currentChannel = Just c, currentError = Nothing}, Cmd.none)
+
+    UnselectChannel ->
+      ({model | currentChannel = Nothing, currentError = Nothing}, Cmd.none)
 
     DidReadItems (Ok ()) ->
       ({model | currentError = Nothing}, Cmd.none)
 
     DidReadItems (Err err) ->
       ({model | currentError = Just err}, Cmd.none)
-
-    CloseDetails ->
-      ({model | currentItem = Nothing, currentError = Nothing}, Cmd.none)
 
     UpdateDate t ->
       ({model | currentDate = Date.fromTime <| t}, Cmd.none)
@@ -109,13 +119,18 @@ viewMaybe view m =
 
 viewChannel: Channel -> Html Msg
 viewChannel c =
-  a [ href "#" , onClick <| FetchItems c] [ text c.title ]
+  a [ href "#", onClick <| SelectChannel c] [ text c.title ]
 
+viewChannels: List Channel -> Html Msg
+viewChannels lc =
+  div []
+    <| List.append [ a [ href "#", onClick UnselectChannel ] [ text "All Feeds" ] ]
+    <| List.map viewChannel lc
 
 viewItem: Date -> Maybe Item -> Item -> Html Msg
 viewItem now cur i =
   if cur == Just i then
-    viewItemDetails i
+    viewItemSelectItem i
   else
     viewItemBrief i now
 
@@ -149,18 +164,18 @@ viewItemBrief: Item -> Date -> Html Msg
 viewItemBrief i now =
   div
   [ classList [ ("brief", True) , ("brief-read", i.read) ]
-  , onClick <| Details i
+  , onClick <| SelectItem i
   ]
-  [ span [ class "brief-channel" ] [ text i.channel.title ]
+  [ span [ class "brief-channel" ] [ text <| Maybe.withDefault "" <| Maybe.map .title i.channel ]
   , span [ class "brief-title" ] [ text i.title ]
   , span [ class "brief-date" ] [text <|  showInterval now i.pub_date]
   ]
 
-viewItemDetails: Item -> Html Msg
-viewItemDetails i =
+viewItemSelectItem: Item -> Html Msg
+viewItemSelectItem i =
   div [ class "details-content" ]
   [ div [class "details-bar"]
-    [ span [onClick CloseDetails] [text "X"]
+    [ span [onClick UnselectItem] [text "X"]
     ]
   , h4 []
     [ a [ href i.link ]
@@ -175,6 +190,12 @@ viewItemDetails i =
     ]
   ]
 
+viewItems: List Item -> Maybe Item -> Maybe Channel -> Date -> Html Msg
+viewItems li mi mc d =
+  div []
+    <| List.map (viewItem d mi)
+    <| List.filter (\i -> mc == Nothing || mc == i.channel) li
+
 viewError: Http.Error -> Html Msg
 viewError e =
   div [style [("background-color","red")]]
@@ -185,13 +206,16 @@ viewRefresh: List Channel -> Html Msg
 viewRefresh c =
   a [ class "site-toolbar-refresh", href "#"] []
 
+
 view: Model -> Html Msg
 view model =
   div [ id "site" ]
   [ header [ class "site-header" ] [ text "Feeder" ]
-  , nav [ class "site-nav" ] <| List.map viewChannel model.channels
+  , nav [ class "site-nav" ] [ viewChannels model.channels ]
   , div [ class "site-toolbar" ] [ viewRefresh model.channels]
-  , main_ [ class "site-main" ] <| List.map (viewItem model.currentDate model.currentItem) model.items
+  , main_ [ class "site-main" ]
+    [ viewItems model.items model.currentItem model.currentChannel model.currentDate
+    ]
   , footer [ class "site-footer" ] [ viewMaybe viewError <| model.currentError ]
   ]
 
@@ -224,7 +248,7 @@ type alias Item =
   , description: String
   , pub_date: Date
   , read: Bool
-  , channel: Channel
+  , channel: Maybe Channel
   }
 
 
@@ -243,8 +267,8 @@ decodeChannels: Decode.Decoder (List Channel)
 decodeChannels =
   Decode.list channelDecoder
 
-itemDecoder: Channel -> Decode.Decoder Item
-itemDecoder c =
+itemDecoder: Decode.Decoder Item
+itemDecoder =
   Pipeline.decode Item
     |> Pipeline.required "id" Decode.int
     |> Pipeline.required "channel_id" Decode.int
@@ -253,13 +277,20 @@ itemDecoder c =
     |> Pipeline.required "description" Decode.string
     |> Pipeline.required "pub_date" DecodeExtra.date
     |> Pipeline.required "read" Decode.bool
-    |> Pipeline.hardcoded c
+    |> Pipeline.hardcoded Nothing
 
-decodeItems: Channel -> Decode.Decoder (List Item)
-decodeItems c =
-  Decode.list <| itemDecoder c
+decodeItems: Decode.Decoder (List Item)
+decodeItems =
+  Decode.list itemDecoder
 
 
+getChannelById: List Channel -> Int -> Maybe Channel
+getChannelById cl id =
+  List.Extra.find (\c -> c.id == id) cl
+
+addChannelToItem: List Channel -> Item -> Item
+addChannelToItem cl i =
+  { i | channel = getChannelById cl i.channel_id }
 
 compareItems: Item -> Item -> Order
 compareItems i1 i2 =
@@ -283,13 +314,13 @@ fetchChannels =
   in
     Http.send GotChannels (Http.get url decodeChannels)
 
-fetchItems : Channel -> Cmd Msg
-fetchItems c =
+fetchItems : Cmd Msg
+fetchItems =
   let
     url =
-      baseUrl ++ "/items/" ++ (toString c.id)
+      baseUrl ++ "/items?max_items=-1&from_id=-1&to_id=-1"
   in
-    Http.send GotItems (Http.get url <| decodeItems c)
+    Http.send GotItems (Http.get url decodeItems)
 
 emptyPost : String -> Http.Request ()
 -- Because when Http.post expects a JSON, and empty responses aren't valid JSON

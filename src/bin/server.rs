@@ -6,6 +6,8 @@ extern crate env_logger;
 extern crate futures;
 extern crate r2d2;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 extern crate feeder;
@@ -27,8 +29,13 @@ impl Actor for DbExecutor {
 }
 
 struct GetChannels;
+#[derive(Deserialize)]
 struct GetItems {
-    chan_id: i32,
+    #[serde(skip)]
+    user_id: i32,
+    from_id: i32,
+    to_id: i32,
+    max_items: i32,
 }
 struct DoReadItem {
     item_id: i32,
@@ -72,8 +79,7 @@ impl Handler<GetItems> for DbExecutor {
         Ok(items
             .inner_join(subscriptions::table.on(channel_id.eq(subscriptions::channel_id)))
             .left_join(read_items::table)
-            .filter(subscriptions::user_id.eq(1))
-            .filter(channel_id.eq(gi.chan_id))
+            .filter(subscriptions::user_id.eq(gi.user_id))
             .select((
                 feeder::schema::items::all_columns,
                 read_items::all_columns.nullable(),
@@ -89,8 +95,8 @@ impl Handler<GetItems> for DbExecutor {
             })
             .map_err(|_| {
                 error::ErrorInternalServerError(format!(
-                    "Error getting items for channel {}",
-                    gi.chan_id
+                    "Error getting items for user {}",
+                    gi.user_id
                 ))
             })?)
     }
@@ -132,12 +138,12 @@ fn channels(state: State<AppState>) -> FutureResponse<HttpResponse> {
         })
         .responder()
 }
-fn items(chan: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+fn items(get_items: Query<GetItems>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+    let mut get_items = get_items.into_inner();
+    get_items.user_id = 1;
     state
         .db
-        .send(GetItems {
-            chan_id: chan.into_inner(),
-        })
+        .send(get_items)
         .from_err()
         .and_then(|res| match res {
             Ok(i) => Ok(HttpResponse::Ok().json(i)),
@@ -182,7 +188,7 @@ fn main() {
                 middleware::cors::Cors::for_app(app)
                     .allowed_origin("http://localhost:8000")
                     .resource("/channels", |r| r.method(http::Method::GET).with(channels))
-                    .resource("/items/{chan_id}", |r| {
+                    .resource("/items", |r| {
                         r.method(http::Method::GET).with2(items)
                     })
                     .resource("/read/{item_id}", |r| {
