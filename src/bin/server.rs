@@ -3,6 +3,8 @@ extern crate actix_web;
 extern crate diesel;
 extern crate dotenv;
 extern crate env_logger;
+#[macro_use]
+extern crate log;
 extern crate futures;
 extern crate r2d2;
 extern crate serde;
@@ -14,13 +16,14 @@ extern crate feeder;
 
 use actix_web::*;
 use actix::prelude::*;
+use actix_web::dev::AsyncResult;
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use dotenv::dotenv;
 use futures::Future;
 
-use feeder::models::{Channel, Item, NewReadItem, ReadItem, UserItem};
+use feeder::models::{Channel, Item, NewReadItem, NewUser, ReadItem, User, UserItem};
 
 struct DbExecutor(pub Pool<ConnectionManager<PgConnection>>);
 
@@ -28,7 +31,12 @@ impl Actor for DbExecutor {
     type Context = SyncContext<Self>;
 }
 
-struct GetChannels;
+struct GetIdentity {
+    name: String,
+}
+struct GetChannels {
+    user_id: i32,
+}
 #[derive(Deserialize)]
 struct GetItems {
     #[serde(skip)]
@@ -42,6 +50,9 @@ struct DoReadItem {
     user_id: i32,
 }
 
+impl Message for GetIdentity {
+    type Result = Result<Identity, Error>;
+}
 impl Message for GetChannels {
     type Result = Result<Vec<Channel>, Error>;
 }
@@ -52,17 +63,27 @@ impl Message for DoReadItem {
     type Result = Result<(), Error>;
 }
 
+impl Handler<GetIdentity> for DbExecutor {
+    type Result = Result<Identity, Error>;
+
+    fn handle(&mut self, gu: GetIdentity, _: &mut Self::Context) -> Self::Result {
+        let conn: &PgConnection = &self.0.get().unwrap();
+        feeder::queries::users::get_or_create(conn, &NewUser { name: &gu.name })
+            .map(|user| Identity { user })
+            .map_err(|_| error::ErrorInternalServerError(format!("Error getting user {}", gu.name)))
+    }
+}
 impl Handler<GetChannels> for DbExecutor {
     type Result = Result<Vec<Channel>, Error>;
 
-    fn handle(&mut self, _: GetChannels, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, gc: GetChannels, _: &mut Self::Context) -> Self::Result {
         use feeder::schema::channels::dsl::*;
         use feeder::schema::subscriptions;
 
         let conn: &PgConnection = &self.0.get().unwrap();
         Ok(channels
             .inner_join(subscriptions::table)
-            .filter(subscriptions::columns::user_id.eq(1))
+            .filter(subscriptions::columns::user_id.eq(gc.user_id))
             .select(feeder::schema::channels::all_columns)
             .get_results(conn)
             .map_err(|_| error::ErrorInternalServerError("Error querying channels"))?)
@@ -136,10 +157,43 @@ struct AppState {
     db: Addr<Syn, DbExecutor>,
 }
 
-fn channels(state: State<AppState>) -> FutureResponse<HttpResponse> {
+struct Identity {
+    user: User,
+}
+impl FromRequest<AppState> for Identity {
+    type Config = ();
+    type Result = AsyncResult<Identity, Error>;
+
+    #[inline]
+    fn from_request(req: &HttpRequest<AppState>, _: &Self::Config) -> Self::Result {
+        let name = match req.headers()
+            .get("X-Forwarded-User")
+            .ok_or(error::ErrorInternalServerError("Error querying channels"))
+        {
+            Ok(n) => n,
+            Err(e) => return AsyncResult::err(e),
+        };
+        let name = match name.to_str().map_err(|_| {
+            error::ErrorInternalServerError("Header value contains invalid characters")
+        }) {
+            Ok(n) => n.to_owned(),
+            Err(e) => return AsyncResult::err(e),
+        };
+        info!("X-Forwarded-User: {}", name);
+        AsyncResult::async(Box::new(
+            req.state()
+                .db
+                .send(GetIdentity { name })
+                .from_err()
+                .and_then(|r| r),
+        ))
+    }
+}
+
+fn channels(state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
-        .send(GetChannels)
+        .send(GetChannels{user_id: identity.user.id})
         .from_err()
         .and_then(|res| match res {
             Ok(c) => Ok(HttpResponse::Ok().json(c)),
@@ -147,9 +201,13 @@ fn channels(state: State<AppState>) -> FutureResponse<HttpResponse> {
         })
         .responder()
 }
-fn items(get_items: Query<GetItems>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+fn items(
+    get_items: Query<GetItems>,
+    state: State<AppState>,
+    identity: Identity,
+) -> FutureResponse<HttpResponse> {
     let mut get_items = get_items.into_inner();
-    get_items.user_id = 1;
+    get_items.user_id = identity.user.id;
     state
         .db
         .send(get_items)
@@ -160,12 +218,12 @@ fn items(get_items: Query<GetItems>, state: State<AppState>) -> FutureResponse<H
         })
         .responder()
 }
-fn read(it: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
+fn read(it: Path<i32>, state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
         .send(DoReadItem {
             item_id: it.into_inner(),
-            user_id: 1,
+            user_id: identity.user.id,
         })
         .from_err()
         .and_then(|res| match res {
@@ -174,12 +232,12 @@ fn read(it: Path<i32>, state: State<AppState>) -> FutureResponse<HttpResponse> {
         })
         .responder()
 }
-fn read_all(state: State<AppState>) -> FutureResponse<HttpResponse> {
+fn read_all(state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
         .send(DoReadItem {
             item_id: -1,
-            user_id: 1,
+            user_id: identity.user.id,
         })
         .from_err()
         .and_then(|res| match res {
@@ -190,7 +248,7 @@ fn read_all(state: State<AppState>) -> FutureResponse<HttpResponse> {
 }
 
 fn main() {
-    std::env::set_var("RUST_LOG", "actix_web=info");
+    std::env::set_var("RUST_LOG", "actix_web=info,feeder=info,server=info");
     dotenv().ok();
     env_logger::init();
 
@@ -208,17 +266,17 @@ fn main() {
     server::new(move || {
         App::with_state(AppState { db: addr.clone() })
             .middleware(middleware::Logger::default())
-            .configure(|app| {
-                middleware::cors::Cors::for_app(app)
-                    .allowed_origin("http://localhost:8000")
-                    .resource("/channels", |r| r.method(http::Method::GET).with(channels))
-                    .resource("/items", |r| r.method(http::Method::GET).with2(items))
-                    .resource("/read/all", |r| r.method(http::Method::POST).with(read_all))
+            //.configure(|app| {
+                //middleware::cors::Cors::for_app(app)
+                //    .allowed_origin("http://localhost:8000")
+                    .resource("/channels", |r| r.method(http::Method::GET).with2(channels))
+                    .resource("/items", |r| r.method(http::Method::GET).with3(items))
+                    .resource("/read/all", |r| r.method(http::Method::POST).with2(read_all))
                     .resource("/read/{item_id}", |r| {
-                        r.method(http::Method::POST).with2(read)
+                        r.method(http::Method::POST).with3(read)
                     })
-                    .register()
-            })
+        //   .register()
+        //})
     }).bind("127.0.0.1:8888")
         .unwrap()
         .start();
