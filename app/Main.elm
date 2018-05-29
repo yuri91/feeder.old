@@ -235,7 +235,8 @@ subscriptions model =
 -- HTTP
 
 baseUrl: String
-baseUrl = "http://localhost:8888"
+--baseUrl = "http://localhost:8888"
+baseUrl = "/api"
 
 type alias Channel =
   { id : Int
