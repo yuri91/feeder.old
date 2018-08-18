@@ -266,17 +266,17 @@ fn main() {
     server::new(move || {
         App::with_state(AppState { db: addr.clone() })
             .middleware(middleware::Logger::default())
-            //.configure(|app| {
-                //middleware::cors::Cors::for_app(app)
-                //    .allowed_origin("http://localhost:8000")
+            .configure(|app| {
+                middleware::cors::Cors::for_app(app)
+                    .allowed_origin("http://localhost:1234")
                     .resource("/channels", |r| r.method(http::Method::GET).with2(channels))
                     .resource("/items", |r| r.method(http::Method::GET).with3(items))
                     .resource("/read/all", |r| r.method(http::Method::POST).with2(read_all))
                     .resource("/read/{item_id}", |r| {
                         r.method(http::Method::POST).with3(read)
                     })
-        //   .register()
-        //})
+           .register()
+        })
     }).bind("127.0.0.1:8888")
         .unwrap()
         .start();
