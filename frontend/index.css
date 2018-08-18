@@ -47,6 +47,10 @@ body {
 	background-color: #ddd;
 	color: black;
 }
+.site-nav a.current {
+	background-color: #ddd;
+	color: black;
+}
 
 .site-toolbar {
 	grid-area: toolbar;
