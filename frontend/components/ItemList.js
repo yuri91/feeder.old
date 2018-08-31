@@ -7,12 +7,12 @@ const ItemList = ({ items, dateNow, selectedId, onSelectClick, onUnselectClick, 
   <div>
     {items.map((item) => (
       <Item key={item.id}
-            item={item}
-            dateNow={dateNow}
-            selected={selectedId==item.id}
-            channelTitle={item.channel_title}
-            onSelectClick={() => {onSelectClick(item.id); if(!item.read) onReadClick(item.id)}}
-            onUnselectClick={() => onUnselectClick(item.id)}
+        item={item}
+        dateNow={dateNow}
+        selected={selectedId==item.id}
+        channelTitle={item.channel_title}
+        onSelectClick={() => {onSelectClick(item.id); if(!item.read) onReadClick(item.id)}}
+        onUnselectClick={() => onUnselectClick(item.id)}
       />
     ))}
   </div>

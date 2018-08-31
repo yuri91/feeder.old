@@ -10,6 +10,8 @@
   "license": "ISC",
   "dependencies": {
     "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "eslint": "^5.4.0",
+    "eslint-plugin-react": "^7.11.1",
     "parcel-bundler": "^1.9.7",
     "react": "^16.4.2",
     "react-dom": "^16.4.2",

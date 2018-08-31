@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8888/"
+const BASE_URL = 'http://localhost:8888/'
 
 const COMMON = {
   mode: 'cors',
