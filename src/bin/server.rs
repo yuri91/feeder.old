@@ -25,7 +25,7 @@ use feeder::actors::DbExecutor;
 use feeder::actors::msg;
 
 struct AppState {
-    db: Addr<Syn, DbExecutor>,
+    db: Addr<DbExecutor>,
 }
 
 struct Identity {
@@ -142,11 +142,11 @@ fn main() {
             .configure(|app| {
                 middleware::cors::Cors::for_app(app)
                     .allowed_origin("http://localhost:1234")
-                    .resource("/channels", |r| r.method(http::Method::GET).with2(channels))
-                    .resource("/items", |r| r.method(http::Method::GET).with3(items))
-                    .resource("/read/all", |r| r.method(http::Method::POST).with2(read_all))
+                    .resource("/channels", |r| r.method(http::Method::GET).with(channels))
+                    .resource("/items", |r| r.method(http::Method::GET).with(items))
+                    .resource("/read/all", |r| r.method(http::Method::POST).with(read_all))
                     .resource("/read/{item_id}", |r| {
-                        r.method(http::Method::POST).with3(read)
+                        r.method(http::Method::POST).with(read)
                     })
            .register()
         })
