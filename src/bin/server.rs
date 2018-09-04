@@ -8,8 +8,6 @@ extern crate log;
 extern crate futures;
 extern crate r2d2;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 extern crate serde_json;
 
 extern crate feeder;
@@ -17,141 +15,14 @@ extern crate feeder;
 use actix_web::*;
 use actix::prelude::*;
 use actix_web::dev::AsyncResult;
-use diesel::prelude::*;
 use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 use futures::Future;
 
-use feeder::models::{Channel, Item, NewReadItem, NewUser, ReadItem, User, UserItem};
-
-struct DbExecutor(pub Pool<ConnectionManager<PgConnection>>);
-
-impl Actor for DbExecutor {
-    type Context = SyncContext<Self>;
-}
-
-struct GetIdentity {
-    name: String,
-}
-struct GetChannels {
-    user_id: i32,
-}
-#[derive(Deserialize)]
-struct GetItems {
-    #[serde(skip)]
-    user_id: i32,
-    from_id: i32,
-    to_id: i32,
-    max_items: i32,
-}
-struct DoReadItem {
-    item_id: i32,
-    user_id: i32,
-}
-
-impl Message for GetIdentity {
-    type Result = Result<Identity, Error>;
-}
-impl Message for GetChannels {
-    type Result = Result<Vec<Channel>, Error>;
-}
-impl Message for GetItems {
-    type Result = Result<Vec<UserItem>, Error>;
-}
-impl Message for DoReadItem {
-    type Result = Result<(), Error>;
-}
-
-impl Handler<GetIdentity> for DbExecutor {
-    type Result = Result<Identity, Error>;
-
-    fn handle(&mut self, gu: GetIdentity, _: &mut Self::Context) -> Self::Result {
-        let conn: &PgConnection = &self.0.get().unwrap();
-        feeder::queries::users::get_or_create(conn, &NewUser { name: &gu.name })
-            .map(|user| Identity { user })
-            .map_err(|_| error::ErrorInternalServerError(format!("Error getting user {}", gu.name)))
-    }
-}
-impl Handler<GetChannels> for DbExecutor {
-    type Result = Result<Vec<Channel>, Error>;
-
-    fn handle(&mut self, gc: GetChannels, _: &mut Self::Context) -> Self::Result {
-        use feeder::schema::channels::dsl::*;
-        use feeder::schema::subscriptions;
-
-        let conn: &PgConnection = &self.0.get().unwrap();
-        Ok(channels
-            .inner_join(subscriptions::table)
-            .filter(subscriptions::columns::user_id.eq(gc.user_id))
-            .select(feeder::schema::channels::all_columns)
-            .get_results(conn)
-            .map_err(|_| error::ErrorInternalServerError("Error querying channels"))?)
-    }
-}
-impl Handler<GetItems> for DbExecutor {
-    type Result = Result<Vec<UserItem>, Error>;
-
-    fn handle(&mut self, gi: GetItems, _: &mut Self::Context) -> Self::Result {
-        use feeder::schema::items::dsl::*;
-        use feeder::schema::read_items;
-        use feeder::schema::subscriptions;
-
-        let conn: &PgConnection = &self.0.get().unwrap();
-        Ok(items
-            .inner_join(subscriptions::table.on(channel_id.eq(subscriptions::channel_id)))
-            .left_join(read_items::table)
-            .filter(subscriptions::user_id.eq(gi.user_id))
-            .select((
-                feeder::schema::items::all_columns,
-                read_items::all_columns.nullable(),
-            ))
-            .get_results(conn)
-            .map(|v: Vec<(Item, Option<ReadItem>)>| {
-                v.into_iter()
-                    .map(|(i, r)| UserItem {
-                        item: i,
-                        read: r.is_some(),
-                    })
-                    .collect()
-            })
-            .map_err(|_| {
-                error::ErrorInternalServerError(format!(
-                    "Error getting items for user {}",
-                    gi.user_id
-                ))
-            })?)
-    }
-}
-impl Handler<DoReadItem> for DbExecutor {
-    type Result = Result<(), Error>;
-
-    fn handle(&mut self, ri: DoReadItem, _: &mut Self::Context) -> Self::Result {
-        let conn: &PgConnection = &self.0.get().unwrap();
-        if ri.item_id < 0 {
-            let _ = feeder::queries::read_items::read_all(conn, ri.user_id).map_err(|_| {
-                error::ErrorInternalServerError(format!(
-                    "Error setting item {} as read for user {}",
-                    ri.item_id, ri.user_id
-                ))
-            })?;
-        } else {
-            let _ = feeder::queries::read_items::get_or_create(
-                conn,
-                &NewReadItem {
-                    user_id: ri.user_id,
-                    item_id: ri.item_id,
-                },
-            ).map_err(|_| {
-                error::ErrorInternalServerError(format!(
-                    "Error setting item {} as read for user {}",
-                    ri.item_id, ri.user_id
-                ))
-            })?;
-        }
-        Ok(())
-    }
-}
+use feeder::models::User;
+use feeder::actors::DbExecutor;
+use feeder::actors::msg;
 
 struct AppState {
     db: Addr<Syn, DbExecutor>,
@@ -183,9 +54,12 @@ impl FromRequest<AppState> for Identity {
         AsyncResult::async(Box::new(
             req.state()
                 .db
-                .send(GetIdentity { name })
+                .send(msg::GetUser { name: name.clone() })
                 .from_err()
-                .and_then(|r| r),
+                .and_then(move |r| match r {
+                    Ok(user) => Ok(Identity { user }),
+                    Err(_) => Err(error::ErrorInternalServerError(format!("Cannot find user {}", name))),
+                })
         ))
     }
 }
@@ -193,7 +67,7 @@ impl FromRequest<AppState> for Identity {
 fn channels(state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
-        .send(GetChannels{user_id: identity.user.id})
+        .send(msg::GetChannels{user_id: identity.user.id})
         .from_err()
         .and_then(|res| match res {
             Ok(c) => Ok(HttpResponse::Ok().json(c)),
@@ -202,7 +76,7 @@ fn channels(state: State<AppState>, identity: Identity) -> FutureResponse<HttpRe
         .responder()
 }
 fn items(
-    get_items: Query<GetItems>,
+    get_items: Query<msg::GetItems>,
     state: State<AppState>,
     identity: Identity,
 ) -> FutureResponse<HttpResponse> {
@@ -221,9 +95,9 @@ fn items(
 fn read(it: Path<i32>, state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
-        .send(DoReadItem {
+        .send(msg::ReadItem {
             item_id: it.into_inner(),
-            user_id: identity.user.id,
+            user_id: identity.user.id
         })
         .from_err()
         .and_then(|res| match res {
@@ -235,8 +109,7 @@ fn read(it: Path<i32>, state: State<AppState>, identity: Identity) -> FutureResp
 fn read_all(state: State<AppState>, identity: Identity) -> FutureResponse<HttpResponse> {
     state
         .db
-        .send(DoReadItem {
-            item_id: -1,
+        .send(msg::ReadAllItems {
             user_id: identity.user.id,
         })
         .from_err()

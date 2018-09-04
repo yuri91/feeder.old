@@ -23,6 +23,15 @@ pub mod channels {
             .values(channel)
             .get_result(conn)
     }
+
+    pub fn get_all_for(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<Channel>> {
+        use schema::subscriptions;
+        channels::table
+            .inner_join(subscriptions::table)
+            .filter(subscriptions::columns::user_id.eq(user_id))
+            .select(channels::all_columns)
+            .get_results(conn)
+    }
 }
 
 pub mod items {
@@ -63,6 +72,28 @@ pub mod items {
 
     pub fn create(conn: &PgConnection, item: &NewItem) -> QueryResult<Item> {
         insert_into(items::table).values(item).get_result(conn)
+    }
+    pub fn get_all_for(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<UserItem>> {
+        use schema::read_items;
+        use schema::subscriptions;
+
+        items::table
+            .inner_join(subscriptions::table.on(items::channel_id.eq(subscriptions::channel_id)))
+            .left_join(read_items::table)
+            .filter(subscriptions::user_id.eq(user_id))
+            .select((
+                items::all_columns,
+                read_items::all_columns.nullable(),
+            ))
+            .get_results(conn)
+            .map(|v: Vec<(Item, Option<ReadItem>)>| {
+                v.into_iter()
+                    .map(|(i, r)| UserItem {
+                        item: i,
+                        read: r.is_some(),
+                    })
+                    .collect()
+            })
     }
 }
 
@@ -157,6 +188,10 @@ pub mod read_items {
         insert_into(read_items::table)
             .values(read_item)
             .get_result(conn)
+    }
+
+    pub fn read(conn: &PgConnection, user_id: i32, item_id: i32) -> QueryResult<()> {
+        get_or_create(conn, &NewReadItem {user_id, item_id}).map(|_| ())
     }
 
     pub fn read_all(conn: &PgConnection, user_id: i32) -> QueryResult<()> {

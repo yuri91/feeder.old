@@ -6,6 +6,7 @@ extern crate rss;
 extern crate serde_derive;
 extern crate serde;
 extern crate chrono;
+extern crate actix;
 
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
@@ -15,6 +16,7 @@ use std::env;
 pub mod schema;
 pub mod models;
 pub mod queries;
+pub mod actors;
 
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
