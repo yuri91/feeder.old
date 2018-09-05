@@ -6,6 +6,7 @@ const EMPTY_STATE = {
   channels: new Map(),
   items: new Map(),
   dateNow: new Date(),
+  showModal: false,
 }
 
 const mergeToMap = (arr, map) => {
@@ -39,6 +40,7 @@ export default handleActions(
     TIME_TICK: (state) => ({ ...state, dateNow: new Date()}),
     FILTER_CHANNEL: (state, { payload: id }) => ({ ...state, selectedChannel: id}),
     SELECT_ITEM: (state, { payload: id }) => ({ ...state, selectedItem: id}),
+    SHOW_MODAL: (state, { payload: show }) => ({ ...state, showModal: show }),
     GET_CHANNELS_FULFILLED: (state, { payload: channels }) => ({ ...state, channels: mergeToMap(channels, state.channels)}),
     GET_ITEMS_FULFILLED: (state, { payload: items }) => ({ ...state, items: mergeToMap(items, state.items)}),
     READ_ITEM_FULFILLED: (state, { payload: id }) => ({ ...state, items: readItem(id, state.items)}),

@@ -10,6 +10,8 @@ import './index.css'
 import FilterChannels from './containers/FilterChannels'
 import FilterItems from './containers/FilterItems'
 import ToolBar from './containers/ToolBar'
+import Modal from './containers/Modal'
+
 import rootReducer from './reducers'
 import { getChannels, getItems, timeTick } from './actions'
 
@@ -31,6 +33,7 @@ const App = () => (
       <FilterItems />
     </main>
     <footer className="site-footer"></footer>
+    <Modal><p>aaa</p></Modal>
   </div>
 )
 
