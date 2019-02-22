@@ -45,6 +45,7 @@ export default handleActions(
     GET_ITEMS_FULFILLED: (state, { payload: items }) => ({ ...state, items: mergeToMap(items, state.items)}),
     READ_ITEM_FULFILLED: (state, { payload: id }) => ({ ...state, items: readItem(id, state.items)}),
     READ_ALL_ITEMS_FULFILLED: (state) => ({ ...state, items: readAllItems(state.items)}),
+    ADD_CHANNEL_FULFILLED: (state, { payload: channel }) => ({ ...state, showModal: false, channels: mergeToMap([channel], state.channels)}),
   },
   EMPTY_STATE
 )

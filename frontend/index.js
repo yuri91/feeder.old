@@ -11,6 +11,7 @@ import FilterChannels from './containers/FilterChannels'
 import FilterItems from './containers/FilterItems'
 import ToolBar from './containers/ToolBar'
 import Modal from './containers/Modal'
+import AddChannelForm from './containers/AddChannelForm'
 
 import rootReducer from './reducers'
 import { getChannels, getItems, timeTick } from './actions'
@@ -19,6 +20,19 @@ const store = createStore(rootReducer, undefined, applyMiddleware(
   promiseMiddleware(),
   createLogger({collapsed: true}),
 ))
+
+const fields = [
+  {
+    name: "f1",
+    descr: "field 1",
+    validate: (v)=>v>3
+  },
+  {
+    name: "f2",
+    descr: "field 2",
+    validate: (v)=>v>3
+  },
+]
 
 const App = () => (
   <div id="site">
@@ -33,7 +47,9 @@ const App = () => (
       <FilterItems />
     </main>
     <footer className="site-footer"></footer>
-    <Modal><p>aaa</p></Modal>
+    <Modal>
+      <AddChannelForm />
+    </Modal>
   </div>
 )
 

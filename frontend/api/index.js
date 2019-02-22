@@ -31,3 +31,9 @@ export const readAllItems = () => fetch(BASE_URL+'read/all', {
   method: 'post',
   ...COMMON
 }).then(() => {})
+
+export const addChannel = (url) => fetch(BASE_URL+'subscribe', {
+  method: 'post',
+  body: JSON.stringify({url: url}),
+  ...COMMON
+}).then((r) => r.json())
