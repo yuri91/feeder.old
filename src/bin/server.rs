@@ -6,14 +6,18 @@ use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 use futures::Future;
 
+use std::sync::Arc;
+
 use log::info;
 
 use feeder::models::User;
-use feeder::actors::DbExecutor;
+use feeder::actors::{DbExecutor, GraphQLExecutor, GraphQLData};
 use feeder::actors::msg;
+use feeder::graphql;
 
 struct AppState {
     db: Addr<DbExecutor>,
+    executor: Addr<GraphQLExecutor>,
 }
 
 struct Identity {
@@ -108,6 +112,27 @@ fn read_all(state: State<AppState>, identity: Identity) -> FutureResponse<HttpRe
         .responder()
 }
 
+fn graphiql(_req: &HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+    let html = juniper::http::graphiql::graphiql_source("http://127.0.0.1:8888/graphql");
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(html))
+}
+
+fn graphql(
+    (st, data): (State<AppState>, Json<GraphQLData>),
+) -> FutureResponse<HttpResponse> {
+    st.executor
+        .send(data.0)
+        .from_err()
+        .and_then(|res| match res {
+            Ok(user) => Ok(HttpResponse::Ok()
+                .content_type("application/json")
+                .body(user)),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
+}
 fn main() {
     std::env::set_var("RUST_LOG", "actix_web=info,feeder=info,server=info");
     dotenv().ok();
@@ -122,20 +147,25 @@ fn main() {
         .build(manager)
         .expect("Failed to create pool");
 
-    let addr = SyncArbiter::start(4, move || DbExecutor(pool.clone()));
+    let db_pool = pool.clone();
+    let db_addr = SyncArbiter::start(4, move || DbExecutor(db_pool.clone()));
+    let graphql_addr = SyncArbiter::start(4, move || GraphQLExecutor{schema: Arc::new(graphql::create_schema()), context: graphql::DbContext(pool.clone())});
 
     server::new(move || {
-        App::with_state(AppState { db: addr.clone() })
+        App::with_state(AppState { db: db_addr.clone(), executor: graphql_addr.clone()})
             .middleware(middleware::Logger::default())
             .configure(|app| {
                 middleware::cors::Cors::for_app(app)
-                    .allowed_origin("http://localhost:1234")
+                    .allowed_origin("http://localhost:8888")
+                    .supports_credentials()
                     .resource("/channels", |r| r.method(http::Method::GET).with(channels))
                     .resource("/items", |r| r.method(http::Method::GET).with(items))
                     .resource("/read/all", |r| r.method(http::Method::POST).with(read_all))
                     .resource("/read/{item_id}", |r| {
                         r.method(http::Method::POST).with(read)
                     })
+                    .resource("/graphql", |r| r.method(http::Method::POST).with(graphql))
+                    .resource("/graphiql", |r| r.method(http::Method::GET).h(graphiql))
            .register()
         })
     }).bind("127.0.0.1:8888")

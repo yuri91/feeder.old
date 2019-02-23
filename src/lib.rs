@@ -10,6 +10,7 @@ pub mod schema;
 pub mod models;
 pub mod queries;
 pub mod actors;
+pub mod graphql;
 
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();

@@ -1,10 +1,14 @@
 use ::actix::prelude::*;
+use actix_web::Error;
 use ::diesel::pg::PgConnection;
 use ::diesel::QueryResult;
 use diesel::r2d2::{ConnectionManager, Pool};
+use juniper::http::GraphQLRequest;
+use serde_derive::{Serialize, Deserialize};
 
-use super::models::*;
-use super::queries;
+use crate::models::*;
+use crate::queries;
+use crate::graphql;
 
 pub mod msg {
     use ::actix::prelude::*;
@@ -53,6 +57,31 @@ pub mod msg {
     }
     impl Message for ReadAllItems {
         type Result = QueryResult<()>;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GraphQLData(GraphQLRequest);
+
+impl Message for GraphQLData {
+    type Result = Result<String, Error>;
+}
+
+pub struct GraphQLExecutor {
+    pub schema: std::sync::Arc<graphql::Schema>,
+    pub context: graphql::DbContext,
+}
+impl Actor for GraphQLExecutor {
+    type Context = SyncContext<Self>;
+}
+
+impl Handler<GraphQLData> for GraphQLExecutor {
+    type Result = Result<String, Error>;
+
+    fn handle(&mut self, msg: GraphQLData, _: &mut Self::Context) -> Self::Result {
+        let res = msg.0.execute(&self.schema, &self.context);
+        let res_text = serde_json::to_string(&res)?;
+        Ok(res_text)
     }
 }
 
