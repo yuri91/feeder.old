@@ -1,5 +1,3 @@
-extern crate rss;
-
 use std::fs::File;
 use std::io::BufReader;
 
@@ -19,6 +17,5 @@ fn main() {
     println!("text_input: {:?}", channel.text_input());
     for item in channel.items() {
         println!("{:?}", item);
-        break;
     }
 }

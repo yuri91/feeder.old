@@ -1,18 +1,12 @@
-extern crate feeder;
-extern crate reqwest;
-#[macro_use]
-extern crate quicli;
-extern crate rss;
-extern crate diesel;
-extern crate chrono;
-
 use chrono::{DateTime, FixedOffset};
 
 use diesel::prelude::*;
 
+use quicli::prelude::*;
+
 use std::io::BufReader;
 
-main!({
+fn main() -> CliResult {
     use feeder::schema::channels::dsl::*;
 
     let conn = feeder::establish_connection();
@@ -43,7 +37,7 @@ main!({
                         Ok(d) => Some(d.naive_utc()),
                         Err(_) => None,
                     }
-                }).unwrap_or(chrono::offset::Utc::now().naive_utc()),
+                }).unwrap_or_else(|| chrono::offset::Utc::now().naive_utc()),
             };
             let inserted = feeder::queries::items::insert_if_new(&conn, &new_item)?;
             if inserted.is_some() {
@@ -53,5 +47,6 @@ main!({
 
         println!("inserted {} items for {}", count, s.title);
     }
-});
+    Ok(())
+}
 

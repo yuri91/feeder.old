@@ -4,8 +4,8 @@ pub mod channels {
     use diesel::QueryResult;
     use diesel::ExpressionMethods;
     use diesel::insert_into;
-    use schema::channels;
-    use models::*;
+    use crate::schema::channels;
+    use crate::models::*;
 
     pub fn get_or_create(conn: &PgConnection, channel: &NewChannel) -> QueryResult<Channel> {
         channels::table
@@ -25,7 +25,7 @@ pub mod channels {
     }
 
     pub fn get_all_for(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<Channel>> {
-        use schema::subscriptions;
+        use crate::schema::subscriptions;
         channels::table
             .inner_join(subscriptions::table)
             .filter(subscriptions::columns::user_id.eq(user_id))
@@ -40,8 +40,8 @@ pub mod items {
     use diesel::QueryResult;
     use diesel::ExpressionMethods;
     use diesel::insert_into;
-    use schema::items;
-    use models::*;
+    use crate::schema::items;
+    use crate::models::*;
 
     pub fn insert_if_new(conn: &PgConnection, item: &NewItem) -> QueryResult<Option<Item>> {
         if item.guid.is_some() {
@@ -74,8 +74,8 @@ pub mod items {
         insert_into(items::table).values(item).get_result(conn)
     }
     pub fn get_all_for(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<UserItem>> {
-        use schema::read_items;
-        use schema::subscriptions;
+        use crate::schema::read_items;
+        use crate::schema::subscriptions;
 
         items::table
             .inner_join(subscriptions::table.on(items::channel_id.eq(subscriptions::channel_id)))
@@ -103,8 +103,8 @@ pub mod users {
     use diesel::QueryResult;
     use diesel::ExpressionMethods;
     use diesel::insert_into;
-    use schema::users;
-    use models::*;
+    use crate::schema::users;
+    use crate::models::*;
 
     pub fn get_or_create(conn: &PgConnection, user: &NewUser) -> QueryResult<User> {
         users::table
@@ -128,8 +128,8 @@ pub mod subscriptions {
     use diesel::QueryResult;
     use diesel::ExpressionMethods;
     use diesel::insert_into;
-    use schema::subscriptions;
-    use models::*;
+    use crate::schema::subscriptions;
+    use crate::models::*;
 
     pub fn get_or_create(
         conn: &PgConnection,
@@ -165,9 +165,9 @@ pub mod read_items {
     use diesel::QueryResult;
     use diesel::ExpressionMethods;
     use diesel::insert_into;
-    use schema::read_items;
-    use schema::items;
-    use models::*;
+    use crate::schema::read_items;
+    use crate::schema::items;
+    use crate::models::*;
 
     pub fn get_or_create(conn: &PgConnection, read_item: &NewReadItem) -> QueryResult<ReadItem> {
         read_items::table

@@ -9,6 +9,7 @@ use super::queries;
 pub mod msg {
     use ::actix::prelude::*;
     use ::diesel::QueryResult;
+    use serde_derive::Deserialize;
 
     use super::super::models::*;
 

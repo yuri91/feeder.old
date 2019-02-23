@@ -1,24 +1,12 @@
-extern crate actix;
-extern crate actix_web;
-extern crate diesel;
-extern crate dotenv;
-extern crate env_logger;
-#[macro_use]
-extern crate log;
-extern crate futures;
-extern crate r2d2;
-extern crate serde;
-extern crate serde_json;
-
-extern crate feeder;
-
 use actix_web::*;
-use actix::prelude::*;
+use ::actix::prelude::*;
 use actix_web::dev::AsyncResult;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 use futures::Future;
+
+use log::info;
 
 use feeder::models::User;
 use feeder::actors::DbExecutor;
@@ -39,7 +27,7 @@ impl FromRequest<AppState> for Identity {
     fn from_request(req: &HttpRequest<AppState>, _: &Self::Config) -> Self::Result {
         let name = match req.headers()
             .get("X-Forwarded-User")
-            .ok_or(error::ErrorInternalServerError("Error querying channels"))
+            .ok_or_else(|| error::ErrorInternalServerError("Error querying channels"))
         {
             Ok(n) => n,
             Err(e) => return AsyncResult::err(e),
@@ -51,7 +39,7 @@ impl FromRequest<AppState> for Identity {
             Err(e) => return AsyncResult::err(e),
         };
         info!("X-Forwarded-User: {}", name);
-        AsyncResult::async(Box::new(
+        AsyncResult::future(Box::new(
             req.state()
                 .db
                 .send(msg::GetUser { name: name.clone() })

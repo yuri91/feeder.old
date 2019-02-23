@@ -1,12 +1,5 @@
 #[macro_use]
 extern crate diesel;
-extern crate dotenv;
-extern crate rss;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate chrono;
-extern crate actix;
 
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
@@ -22,7 +15,7 @@ pub fn establish_connection() -> PgConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
+    PgConnection::establish(&database_url).unwrap_or_else(|_| panic!(format!("Error connecting to {}", database_url)))
 }
 
 

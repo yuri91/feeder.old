@@ -3,8 +3,10 @@ use super::schema::items;
 use super::schema::users;
 use super::schema::subscriptions;
 use super::schema::read_items;
-use super::chrono::NaiveDateTime;
+use chrono::NaiveDateTime;
 
+use serde_derive::Serialize;
+use diesel::{Queryable, Identifiable, Insertable, Associations};
 
 #[derive(Identifiable, Queryable, Serialize, PartialEq, Debug)]
 #[table_name = "channels"]

@@ -1,10 +1,5 @@
-extern crate feeder;
-extern crate reqwest;
-#[macro_use]
-extern crate quicli;
-extern crate rss;
-
 use quicli::prelude::*;
+use structopt::StructOpt;
 
 use std::io::BufReader;
 
@@ -15,7 +10,8 @@ struct Cli {
     url: String,
 }
 
-main!(|args: Cli| {
+fn main() -> CliResult {
+    let args = Cli::from_args();
     let resp = reqwest::get(&args.url)?;
     let channel = rss::Channel::read_from(BufReader::new(resp)).expect("Invalid xml file");
 
@@ -43,5 +39,7 @@ main!(|args: Cli| {
     let _ = feeder::queries::subscriptions::get_or_create(&conn, &sub)?;
 
     println!("user {} subscribed to channel", user.name);
-});
+
+    Ok(())
+}
 
