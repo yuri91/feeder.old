@@ -2,7 +2,6 @@ use juniper::graphql_object;
 use juniper::FieldResult;
 use juniper::RootNode;
 use diesel::pg::PgConnection;
-use diesel::QueryResult;
 use diesel::r2d2::{ConnectionManager, Pool};
 
 use crate::models::*;
