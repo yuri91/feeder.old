@@ -90,6 +90,23 @@ graphql_object!(Mutation: Context |&self| {
         queries::read_items::read_all(conn, executor.context().user.id)?;
         Ok(())
     }
+    field subscribe(&executor, url: String) -> FieldResult<Channel> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+
+        let resp = reqwest::get(&url)?;
+        let channel = rss::Channel::read_from(std::io::BufReader::new(resp)).expect("Invalid xml file");
+
+        let channel = NewChannel {
+            title: channel.title(),
+            link: channel.link(),
+            description: channel.description(),
+            source: &url,
+            image: channel.image().map(|i| i.url()),
+            ttl: channel.ttl().map(|t| t.parse().expect("Invalid TTL field")),
+        };
+        let channel = queries::channels::get_or_create(&conn, &channel)?;
+        Ok(channel)
+    }
 });
 
 pub type Schema = RootNode<'static, Query, Mutation>;
