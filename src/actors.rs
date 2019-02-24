@@ -63,23 +63,29 @@ pub mod msg {
 #[derive(Serialize, Deserialize)]
 pub struct GraphQLData(GraphQLRequest);
 
-impl Message for GraphQLData {
+pub struct UserGraphQLData {
+    pub user: User,
+    pub data: GraphQLData
+}
+
+impl Message for UserGraphQLData {
     type Result = Result<String, Error>;
 }
 
 pub struct GraphQLExecutor {
     pub schema: std::sync::Arc<graphql::Schema>,
-    pub context: graphql::DbContext,
+    pub db: Pool<ConnectionManager<PgConnection>>,
 }
 impl Actor for GraphQLExecutor {
     type Context = SyncContext<Self>;
 }
 
-impl Handler<GraphQLData> for GraphQLExecutor {
+impl Handler<UserGraphQLData> for GraphQLExecutor {
     type Result = Result<String, Error>;
 
-    fn handle(&mut self, msg: GraphQLData, _: &mut Self::Context) -> Self::Result {
-        let res = msg.0.execute(&self.schema, &self.context);
+    fn handle(&mut self, msg: UserGraphQLData, _: &mut Self::Context) -> Self::Result {
+        let context = graphql::Context { db: self.db.clone(), user: msg.user};
+        let res = msg.data.0.execute(&self.schema, &context);
         let res_text = serde_json::to_string(&res)?;
         Ok(res_text)
     }

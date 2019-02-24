@@ -1,35 +1,42 @@
 use juniper::graphql_object;
 use juniper::FieldResult;
 use juniper::RootNode;
-use juniper::EmptyMutation;
 use diesel::pg::PgConnection;
 use diesel::QueryResult;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::models::{User, Item, };
+use crate::models::{User, UserItem, };
+use crate::queries;
 
-pub struct DbContext(pub Pool<ConnectionManager<PgConnection>>);
+pub struct Context {
+    pub db: Pool<ConnectionManager<PgConnection>>,
+    pub user: User,
+}
 
-impl juniper::Context for DbContext {}
+impl juniper::Context for Context {}
 
-graphql_object!(User: DbContext |&self| {
+graphql_object!(UserItem: Context |&self| {
     field id() -> i32 {
-        self.id
+        self.item.id
     }
-    field name() -> &str {
-        &self.name
+    field title() -> &str {
+        &self.item.title
+    }
+    field read() -> bool {
+        self.read
     }
 });
 
 pub struct Query;
-graphql_object!(Query: DbContext |&self| {
-    field user(&executor, id: i32) -> User {
-        User{id: 1, name: "aaa".to_owned()}
+graphql_object!(Query: Context |&self| {
+    field items(&executor) -> FieldResult<Vec<UserItem>> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+        Ok(queries::items::get_all_for(conn, executor.context().user.id)?)
     }
 });
 
 pub struct Mutation;
-graphql_object!(Mutation: DbContext |&self| {
+graphql_object!(Mutation: Context |&self| {
 });
 
 pub type Schema = RootNode<'static, Query, Mutation>;

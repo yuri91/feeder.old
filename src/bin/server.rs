@@ -11,7 +11,7 @@ use std::sync::Arc;
 use log::info;
 
 use feeder::models::User;
-use feeder::actors::{DbExecutor, GraphQLExecutor, GraphQLData};
+use feeder::actors::{DbExecutor, GraphQLExecutor, GraphQLData, UserGraphQLData};
 use feeder::actors::msg;
 use feeder::graphql;
 
@@ -29,19 +29,20 @@ impl FromRequest<AppState> for Identity {
 
     #[inline]
     fn from_request(req: &HttpRequest<AppState>, _: &Self::Config) -> Self::Result {
-        let name = match req.headers()
-            .get("X-Forwarded-User")
-            .ok_or_else(|| error::ErrorInternalServerError("Error querying channels"))
-        {
-            Ok(n) => n,
-            Err(e) => return AsyncResult::err(e),
-        };
-        let name = match name.to_str().map_err(|_| {
-            error::ErrorInternalServerError("Header value contains invalid characters")
-        }) {
-            Ok(n) => n.to_owned(),
-            Err(e) => return AsyncResult::err(e),
-        };
+        //let name = match req.headers()
+        //    .get("X-Forwarded-User")
+        //    .ok_or_else(|| error::ErrorInternalServerError("Error querying channels"))
+        //{
+        //    Ok(n) => n,
+        //    Err(e) => return AsyncResult::err(e),
+        //};
+        //let name = match name.to_str().map_err(|_| {
+        //    error::ErrorInternalServerError("Header value contains invalid characters")
+        //}) {
+        //    Ok(n) => n.to_owned(),
+        //    Err(e) => return AsyncResult::err(e),
+        //};
+        let name = "yuri".to_owned();
         info!("X-Forwarded-User: {}", name);
         AsyncResult::future(Box::new(
             req.state()
@@ -119,11 +120,10 @@ fn graphiql(_req: &HttpRequest<AppState>) -> Result<HttpResponse, Error> {
         .body(html))
 }
 
-fn graphql(
-    (st, data): (State<AppState>, Json<GraphQLData>),
-) -> FutureResponse<HttpResponse> {
+fn graphql(st: State<AppState>, data: Json<GraphQLData>, identity: Identity) -> FutureResponse<HttpResponse> {
+    let msg = UserGraphQLData { user: identity.user, data: data.0};
     st.executor
-        .send(data.0)
+        .send(msg)
         .from_err()
         .and_then(|res| match res {
             Ok(user) => Ok(HttpResponse::Ok()
@@ -149,7 +149,7 @@ fn main() {
 
     let db_pool = pool.clone();
     let db_addr = SyncArbiter::start(4, move || DbExecutor(db_pool.clone()));
-    let graphql_addr = SyncArbiter::start(4, move || GraphQLExecutor{schema: Arc::new(graphql::create_schema()), context: graphql::DbContext(pool.clone())});
+    let graphql_addr = SyncArbiter::start(4, move || GraphQLExecutor{schema: Arc::new(graphql::create_schema()), db: pool.clone()});
 
     server::new(move || {
         App::with_state(AppState { db: db_addr.clone(), executor: graphql_addr.clone()})
