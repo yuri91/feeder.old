@@ -7,6 +7,13 @@ pub mod channels {
     use crate::schema::channels;
     use crate::models::*;
 
+    pub fn get(conn: &PgConnection, id: i32) -> QueryResult<Option<Channel>> {
+        channels::table
+            .filter(channels::id.eq(id))
+            .first::<Channel>(conn)
+            .optional()
+    }
+
     pub fn get_or_create(conn: &PgConnection, channel: &NewChannel) -> QueryResult<Channel> {
         channels::table
             .filter(channels::link.eq(channel.link))

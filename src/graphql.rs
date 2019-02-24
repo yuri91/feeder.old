@@ -5,7 +5,7 @@ use diesel::pg::PgConnection;
 use diesel::QueryResult;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::models::{User, UserItem, };
+use crate::models::*;
 use crate::queries;
 
 pub struct Context {
@@ -15,12 +15,52 @@ pub struct Context {
 
 impl juniper::Context for Context {}
 
-graphql_object!(UserItem: Context |&self| {
+graphql_object!(Channel: Context |&self| {
+    field id() -> i32 {
+        self.id
+    }
+    field title() -> &str {
+        &self.title
+    }
+    field link() -> &str {
+        &self.link
+    }
+    field description() -> &str {
+        &self.description
+    }
+    field source() -> &str {
+        &self.source
+    }
+    field image() -> Option<&str> {
+        self.image.as_ref().map(|s| s.as_ref())
+    }
+    field ttl() -> Option<i32> {
+        self.ttl
+    }
+});
+
+graphql_object!(UserItem: Context as "Item" |&self| {
     field id() -> i32 {
         self.item.id
     }
     field title() -> &str {
         &self.item.title
+    }
+    field channel(&executor) -> FieldResult<Channel> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+        Ok(queries::channels::get(conn, self.item.channel_id)?.unwrap())
+    }
+    field link() -> &str {
+        &self.item.link
+    }
+    field description() -> &str {
+        &self.item.description
+    }
+    field pub_date() -> String {
+        self.item.pub_date.to_string()
+    },
+    field guid() -> Option<&str> {
+        self.item.guid.as_ref().map(|s| s.as_ref())
     }
     field read() -> bool {
         self.read
@@ -33,10 +73,24 @@ graphql_object!(Query: Context |&self| {
         let conn: &PgConnection = &executor.context().db.get().unwrap();
         Ok(queries::items::get_all_for(conn, executor.context().user.id)?)
     }
+    field subscriptions(&executor) -> FieldResult<Vec<Channel>> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+        Ok(queries::channels::get_all_for(conn, executor.context().user.id)?)
+    }
 });
 
 pub struct Mutation;
 graphql_object!(Mutation: Context |&self| {
+    field read(&executor, id: i32) -> FieldResult<()> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+        queries::read_items::read(conn, executor.context().user.id, id)?;
+        Ok(())
+    }
+    field read_all(&executor) -> FieldResult<()> {
+        let conn: &PgConnection = &executor.context().db.get().unwrap();
+        queries::read_items::read_all(conn, executor.context().user.id)?;
+        Ok(())
+    }
 });
 
 pub type Schema = RootNode<'static, Query, Mutation>;
